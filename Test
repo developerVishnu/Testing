@@ -1,1 +1,74 @@
 test
+import { getExceptionCatalogue } from './pathToYourFunction'; // Adjust the import
+import exceptionApi from './exceptionApi'; // Adjust the import
+import { AxiosResponse } from 'axios';
+
+jest.mock('./exceptionApi'); // Mock the exceptionApi module
+
+describe('getExceptionCatalogue', () => {
+  const mockGet = jest.fn();
+  const mockExceptionApi = { get: mockGet };
+  (exceptionApi as jest.Mock).mockReturnValue(mockExceptionApi);
+
+  const txPersona = 'persona1';
+  const stage = 'stage1';
+  const pageNumber = 1;
+  const pageSize = 10;
+  const transactionReference = 'trans123';
+
+  const mockResponseData = {
+    data: {
+      items: [],
+      total: 0,
+    },
+  };
+
+  const mockAxiosResponse: AxiosResponse = {
+    data: mockResponseData.data,
+    status: 200,
+    statusText: 'OK',
+    headers: {},
+    config: {},
+  };
+
+  beforeEach(() => {
+    mockGet.mockClear(); // Clear mock calls before each test
+  });
+
+  it('should call exceptionApi.get with the correct parameters', async () => {
+    mockGet.mockResolvedValueOnce(mockAxiosResponse); // Simulate resolved response
+
+    const response = await getExceptionCatalogue(
+      txPersona,
+      stage,
+      pageNumber,
+      pageSize,
+      transactionReference
+    );
+
+    // Verify the response
+    expect(response).toEqual(mockResponseData.data);
+
+    // Verify the API call
+    expect(mockGet).toHaveBeenCalledWith(
+      `/exceptioncatalogue/${txPersona}/${stage}`,
+      {
+        params: {
+          txbookinglocation: expect.any(String), // Mocked config.userBookingLocation
+          transactionreference: transactionReference,
+          exceptionworkflowid: '**',
+          pagenumber: pageNumber,
+          pagesize: pageSize,
+        },
+      }
+    );
+  });
+
+  it('should handle API errors', async () => {
+    mockGet.mockRejectedValueOnce(new Error('API Error')); // Simulate an error
+
+    await expect(
+      getExceptionCatalogue(txPersona, stage, pageNumber, pageSize, transactionReference)
+    ).rejects.toThrow('API Error'); // Verify error is thrown
+  });
+});
