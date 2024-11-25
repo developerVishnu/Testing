@@ -1,4 +1,3 @@
-test
 import { getExceptionCatalogue } from './your-file'; // Replace with the actual file name
 import { exceptionApi } from './exceptionApi'; // Replace with the actual import path
 
@@ -6,12 +5,14 @@ jest.mock('./exceptionApi'); // Mock the exceptionApi module
 
 describe('getExceptionCatalogue', () => {
   it('should fetch and return exception catalog data', async () => {
-    // Mock data
+    // Mock response data
     const mockResponse = { data: { success: true, items: [] } };
-    const mockedExceptionApi = jest.fn().mockResolvedValue({
-      get: jest.fn().mockResolvedValue(mockResponse),
+
+    // Mock the exceptionApi.get method
+    const mockGet = jest.fn().mockResolvedValue(mockResponse);
+    (exceptionApi as jest.Mock).mockResolvedValue({
+      get: mockGet,
     });
-    (exceptionApi as jest.Mock).mockImplementation(mockedExceptionApi);
 
     // Test inputs
     const txPersona = 'testPersona';
@@ -30,8 +31,8 @@ describe('getExceptionCatalogue', () => {
     );
 
     // Assertions
-    expect(exceptionApi).toHaveBeenCalledTimes(1);
-    expect(mockedExceptionApi().get).toHaveBeenCalledWith(
+    expect(exceptionApi).toHaveBeenCalledTimes(1); // Ensure exceptionApi is called once
+    expect(mockGet).toHaveBeenCalledWith(
       `exceptioncatalogue/${txPersona}/${stage}`,
       {
         params: {
@@ -43,14 +44,15 @@ describe('getExceptionCatalogue', () => {
         },
       }
     );
-    expect(result).toEqual(mockResponse.data);
+    expect(result).toEqual(mockResponse.data); // Ensure the result matches the mock response
   });
 
   it('should throw an error if the API call fails', async () => {
-    const mockedExceptionApi = jest.fn().mockResolvedValue({
-      get: jest.fn().mockRejectedValue(new Error('API Error')),
+    // Mock the exceptionApi.get method to throw an error
+    const mockGet = jest.fn().mockRejectedValue(new Error('API Error'));
+    (exceptionApi as jest.Mock).mockResolvedValue({
+      get: mockGet,
     });
-    (exceptionApi as jest.Mock).mockImplementation(mockedExceptionApi);
 
     // Test inputs
     const txPersona = 'testPersona';
@@ -69,55 +71,5 @@ describe('getExceptionCatalogue', () => {
         transactionReference
       )
     ).rejects.toThrow('API Error');
-  });
-});
-
-
-
-
-itsitstid
-
-    config: {},
-  };
-
-  beforeEach(() => {
-    mockGet.mockClear(); // Clear mock calls before each test
-  });
-
-  it('should call exceptionApi.get with the correct parameters', async () => {
-    mockGet.mockResolvedValueOnce(mockAxiosResponse); // Simulate resolved response
-
-    const response = await getExceptionCatalogue(
-      txPersona,
-      stage,
-      pageNumber,
-      pageSize,
-      transactionReference
-    );
-
-    // Verify the response
-    expect(response).toEqual(mockResponseData.data);
-
-    // Verify the API call
-    expect(mockGet).toHaveBeenCalledWith(
-      `/exceptioncatalogue/${txPersona}/${stage}`,
-      {
-        params: {
-          txbookinglocation: expect.any(String), // Mocked config.userBookingLocation
-          transactionreference: transactionReference,
-          exceptionworkflowid: '**',
-          pagenumber: pageNumber,
-          pagesize: pageSize,
-        },
-      }
-    );
-  });
-
-  it('should handle API errors', async () => {
-    mockGet.mockRejectedValueOnce(new Error('API Error')); // Simulate an error
-
-    await expect(
-      getExceptionCatalogue(txPersona, stage, pageNumber, pageSize, transactionReference)
-    ).rejects.toThrow('API Error'); // Verify error is thrown
   });
 });
