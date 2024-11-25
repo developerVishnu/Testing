@@ -1,33 +1,82 @@
 test
-import { getExceptionCatalogue } from './pathToYourFunction'; // Adjust the import
-import exceptionApi from './exceptionApi'; // Adjust the import
-import { AxiosResponse } from 'axios';
+import { getExceptionCatalogue } from './your-file'; // Replace with the actual file name
+import { exceptionApi } from './exceptionApi'; // Replace with the actual import path
 
 jest.mock('./exceptionApi'); // Mock the exceptionApi module
 
 describe('getExceptionCatalogue', () => {
-  const mockGet = jest.fn();
-  const mockExceptionApi = { get: mockGet };
-  (exceptionApi as jest.Mock).mockReturnValue(mockExceptionApi);
+  it('should fetch and return exception catalog data', async () => {
+    // Mock data
+    const mockResponse = { data: { success: true, items: [] } };
+    const mockedExceptionApi = jest.fn().mockResolvedValue({
+      get: jest.fn().mockResolvedValue(mockResponse),
+    });
+    (exceptionApi as jest.Mock).mockImplementation(mockedExceptionApi);
 
-  const txPersona = 'persona1';
-  const stage = 'stage1';
-  const pageNumber = 1;
-  const pageSize = 10;
-  const transactionReference = 'trans123';
+    // Test inputs
+    const txPersona = 'testPersona';
+    const stage = 'testStage';
+    const pageNumber = 1;
+    const pageSize = 10;
+    const transactionReference = 'testTransaction';
 
-  const mockResponseData = {
-    data: {
-      items: [],
-      total: 0,
-    },
-  };
+    // Call the function
+    const result = await getExceptionCatalogue(
+      txPersona,
+      stage,
+      pageNumber,
+      pageSize,
+      transactionReference
+    );
 
-  const mockAxiosResponse: AxiosResponse = {
-    data: mockResponseData.data,
-    status: 200,
-    statusText: 'OK',
-    headers: {},
+    // Assertions
+    expect(exceptionApi).toHaveBeenCalledTimes(1);
+    expect(mockedExceptionApi().get).toHaveBeenCalledWith(
+      `exceptioncatalogue/${txPersona}/${stage}`,
+      {
+        params: {
+          txbookinglocation: 'config-userBookingLocation', // Update if this is dynamic
+          transactionreference: transactionReference,
+          exceptionworkflowid: "'",
+          pagenumber: pageNumber,
+          pagesize: pageSize,
+        },
+      }
+    );
+    expect(result).toEqual(mockResponse.data);
+  });
+
+  it('should throw an error if the API call fails', async () => {
+    const mockedExceptionApi = jest.fn().mockResolvedValue({
+      get: jest.fn().mockRejectedValue(new Error('API Error')),
+    });
+    (exceptionApi as jest.Mock).mockImplementation(mockedExceptionApi);
+
+    // Test inputs
+    const txPersona = 'testPersona';
+    const stage = 'testStage';
+    const pageNumber = 1;
+    const pageSize = 10;
+    const transactionReference = 'testTransaction';
+
+    // Call the function and expect it to throw
+    await expect(
+      getExceptionCatalogue(
+        txPersona,
+        stage,
+        pageNumber,
+        pageSize,
+        transactionReference
+      )
+    ).rejects.toThrow('API Error');
+  });
+});
+
+
+
+
+itsitstid
+
     config: {},
   };
 
