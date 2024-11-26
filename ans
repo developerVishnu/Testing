@@ -1,21 +1,34 @@
-import { getTXNs } from './yourModule'; // Replace with the correct path to your module
-import { txnwdApi } from './api'; // Replace with the correct path to your API module
+import { getCodeDecode } from './yourModule'; // Replace with the actual module path
+import { exceptionApi } from './api'; // Replace with the actual module path
 import { AxiosResponse } from 'axios';
 
-// Mock the API module
 jest.mock('./api', () => ({
-  txnwdApi: jest.fn(),
+  exceptionApi: jest.fn(),
 }));
 
-describe('getTXNs', () => {
-  it('should call the API with correct parameters and return response data', async () => {
-    // Mock the API and response
-    const mockGet = jest.fn();
-    const mockApi = { get: mockGet };
-    (txnwdApi as jest.Mock).mockResolvedValue(mockApi);
+describe('getCodeDecode', () => {
+  let mockGet: jest.Mock;
+  let mockApi: any;
+
+  beforeEach(() => {
+    mockGet = jest.fn();
+    mockApi = { get: mockGet };
+    (exceptionApi as jest.Mock).mockResolvedValue(mockApi);
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('should fetch code decode details with correct parameters', async () => {
+    const institution = 'Institution1';
+    const codeid = 'Code123';
+    const bookinglocation = 'Location1';
+    const codevalues = 'Value1';
+    const languagecode = 'en';
 
     const mockResponse: AxiosResponse = {
-      data: { transactions: [] }, // Mock response data
+      data: { result: 'success' },
       status: 200,
       statusText: 'OK',
       headers: {},
@@ -23,271 +36,43 @@ describe('getTXNs', () => {
     };
     mockGet.mockResolvedValue(mockResponse);
 
-    // Test input parameters
-    const filterData = {
-      txnNumber: 'TX123',
-      transactionWorkflowStage: 'Stage1',
-      bookingLocation: 'Location1',
-      ackNumber: 'ACK123',
-      submissionMode: 'Online',
-      fromDateWithTime: '2024-11-01T00:00:00Z',
-      toDateWithTime: '2024-11-25T23:59:59Z',
-      product: 'Product1',
-      step: 'Step1',
-      subStep: 'SubStep1',
-      stepNumber: 1,
-      generatedBy: 'Customer123',
-      amlStatus: 'AML Approved',
-      lliStatus: 'LLI Pending',
-      callbackStatus: 'Callback Done',
-      sanctionStatus: 'Sanction Pending',
-      clientReference: 'REF123',
+    const result = await getCodeDecode(
+      institution,
+      codeid,
+      bookinglocation,
+      codevalues,
+      languagecode
+    );
+
+    expect(exceptionApi).toHaveBeenCalled();
+    expect(mockGet).toHaveBeenCalledWith(`/codedecodes/${institution}/${codeid}`, {
+      params: {
+        bookinglocation,
+        codevalues,
+        languagecode,
+      },
+    });
+    expect(result).toEqual(mockResponse.data);
+  });
+
+  it('should handle API errors gracefully', async () => {
+    const institution = 'Institution1';
+    const codeid = 'Code123';
+
+    const mockError = {
+      response: { status: 404, data: { message: 'Not Found' } },
     };
-    const pageNumber = 1;
-    const pageSize = 10;
-    const txPersonas = 'Persona1';
-    const stage = 'Stage2';
+    mockGet.mockRejectedValue(mockError);
 
-    // Call the function
-    const result = await getTXNs(filterData, pageNumber, pageSize, txPersonas, stage);
+    await expect(getCodeDecode(institution, codeid)).rejects.toEqual(mockError.response);
 
-    // Assertions
-    expect(txnwdApi).toHaveBeenCalledTimes(1); // Ensure the API is called
-    expect(mockGet).toHaveBeenCalledWith('/transactionworkflowdetails', {
+    expect(exceptionApi).toHaveBeenCalled();
+    expect(mockGet).toHaveBeenCalledWith(`/codedecodes/${institution}/${codeid}`, {
       params: {
-        pageNumber,
-        pageSize,
-        transactionReference: filterData.txnNumber,
-        transactionWorkflowId: '',
-        transactionWorkflowStage: filterData.transactionWorkflowStage,
-        txBookingLocation: filterData.bookingLocation,
-        acknowledgementNumber: filterData.ackNumber,
-        submissionMode: filterData.submissionMode,
-        fromDate: filterData.fromDateWithTime,
-        toDate: filterData.toDateWithTime,
-        product: filterData.product,
-        step: filterData.step,
-        subStep: filterData.subStep,
-        stepNumber: filterData.stepNumber,
-        customerID: filterData.generatedBy,
-        txpersonas: txPersonas,
-        exceptionWorkflowStage: stage,
-        amlStatus: filterData.amlStatus,
-        lliStatus: filterData.lliStatus,
-        callbackStatus: filterData.callbackStatus,
-        sanctionStatus: filterData.sanctionStatus,
-        clientReference: filterData.clientReference,
+        bookinglocation: undefined,
+        codevalues: undefined,
+        languagecode: undefined,
       },
     });
-
-    // Ensure the result is correct
-    expect(result).toEqual(mockResponse.data);
   });
-
-  it('should throw an error if the API call fails', async () => {
-    const mockError = new Error('API call failed');
-    const mockGet = jest.fn().mockRejectedValue(mockError);
-    const mockApi = { get: mockGet };
-    (txnwdApi as jest.Mock).mockResolvedValue(mockApi);
-
-    const filterData = {}; // Simplified for this test
-    const pageNumber = 1;
-    const pageSize = 10;
-    const txPersonas = 'Persona1';
-    const stage = 'Stage2';
-
-    await expect(getTXNs(filterData, pageNumber, pageSize, txPersonas, stage)).rejects.toThrow(
-      'API call failed'
-    );
-  });
-});
-
-import { 
-  getTXN, 
-  postMenulist, 
-  getTransactionDetailsApi, 
-  getGeneralDetailsAPI, 
-  getTransactionPreProcessingApi, 
-  getDocumentsDetailsApi, 
-  getDocumentBatchDetailsApi, 
-  getFinancesDetailsApi, 
-  getFevFinancesDetailsApi, 
-  getJournalDetailsApi, 
-  getMarginDetailsApi, 
-  getPartyDetailsApi 
-} from './yourModule'; // Replace with the correct module path
-
-import { txnwdApi } from './api'; // Replace with the correct API module path
-import { AxiosResponse } from 'axios';
-
-jest.mock('./api', () => ({
-  txnwdApi: jest.fn(),
-}));
-
-describe('API Tests', () => {
-  let mockGet: jest.Mock;
-  let mockPost: jest.Mock;
-  let mockApi: any;
-
-  beforeEach(() => {
-    mockGet = jest.fn();
-    mockPost = jest.fn();
-    mockApi = { get: mockGet, post: mockPost };
-    (txnwdApi as jest.Mock).mockResolvedValue(mockApi);
-  });
-
-  afterEach(() => {
-    jest.clearAllMocks();
-  });
-
-  test('getTXN should call API with correct parameters', async () => {
-    const transactionReference = 'TRX123';
-    const step = 'Step1';
-    const subStep = 'SubStep1';
-    const stepNumber = '1';
-
-    const mockResponse: AxiosResponse = { data: {}, status: 200, statusText: 'OK', headers: {}, config: {} };
-    mockGet.mockResolvedValue(mockResponse);
-
-    const result = await getTXN(transactionReference, step, subStep, stepNumber);
-
-    expect(mockGet).toHaveBeenCalledWith('/transactionworkflowdetails', {
-      params: {
-        pageNumber: 0,
-        pageSize: 1,
-        transactionReference,
-        step,
-        subStep,
-        stepNumber,
-      },
-    });
-    expect(result).toEqual(mockResponse);
-  });
-
-  test('postMenulist should call API with correct parameters', async () => {
-    const institution = 'Inst1';
-    const parameterID = 'Param123';
-    const bookingLocation = 'Location1';
-    const product = 'Product1';
-    const step = 'Step1';
-    const subStep = 'SubStep1';
-
-    const mockResponse: AxiosResponse = { data: {}, status: 200, statusText: 'OK', headers: {}, config: {} };
-    mockPost.mockResolvedValue(mockResponse);
-
-    const result = await postMenulist(institution, parameterID, bookingLocation, product, step, subStep);
-
-    expect(mockPost).toHaveBeenCalledWith(
-      `/parameters/${institution}/${parameterID}/undefined/data/search`,
-      {
-        parameterKeyDetails: {
-          key1: bookingLocation,
-          key2: product,
-          key3: step,
-          key4: subStep,
-        },
-      }
-    );
-    expect(result).toEqual(mockResponse.data);
-  });
-
-  test('getTransactionDetailsApi should call API with correct endpoint', async () => {
-    const transactionreference = 'TRX123';
-    const mockResponse: AxiosResponse = { data: {}, status: 200, statusText: 'OK', headers: {}, config: {} };
-    mockGet.mockResolvedValue(mockResponse);
-
-    const result = await getTransactionDetailsApi(transactionreference);
-
-    expect(mockGet).toHaveBeenCalledWith(`/enquiryprojections/${transactionreference}/transaction`);
-    expect(result).toEqual(mockResponse);
-  });
-
-  test('getGeneralDetailsAPI should call API with correct parameters', async () => {
-    const institution = 'Inst1';
-    const txbookinglocation = 'Location1';
-    const transactionreference = 'TRX123';
-    const pagenumber = 1;
-    const pagesize = 10;
-    const stepnumber = 'Step123';
-
-    const mockResponse: AxiosResponse = { data: {}, status: 200, statusText: 'OK', headers: {}, config: {} };
-    mockGet.mockResolvedValue(mockResponse);
-
-    const result = await getGeneralDetailsAPI(
-      institution,
-      txbookinglocation,
-      transactionreference,
-      pagenumber,
-      pagesize,
-      stepnumber
-    );
-
-    expect(mockGet).toHaveBeenCalledWith(`/enquiryprojections/${transactionreference}/transactionstepdetails`, {
-      params: {
-        institution,
-        txbookinglocation,
-        pagenumber,
-        pagesize,
-        stepnumber,
-      },
-    });
-    expect(result).toEqual(mockResponse);
-  });
-
-  test('getTransactionPreProcessingApi should call API with correct parameters', async () => {
-    const institution = 'Inst1';
-    const splitRequestID = 'REQ123';
-
-    const mockResponse: AxiosResponse = { data: {}, status: 200, statusText: 'OK', headers: {}, config: {} };
-    mockGet.mockResolvedValue(mockResponse);
-
-    const result = await getTransactionPreProcessingApi(institution, splitRequestID);
-
-    expect(mockGet).toHaveBeenCalledWith(`/clientrequests/requestsplitter/split/${splitRequestID}/transactiondetails`, {
-      params: {
-        institution,
-      },
-    });
-    expect(result).toEqual(mockResponse);
-  });
-
-  test('getDocumentsDetailsApi should call API with correct parameters', async () => {
-    const institution = 'Inst1';
-    const txbookinglocation = 'Location1';
-    const transactionreference = 'TRX123';
-    const pagenumber = 1;
-    const pagesize = 10;
-    const stepnumber = 'Step123';
-    const documentid = 'Doc123';
-    const showhistoryflag = 'Y';
-
-    const mockResponse: AxiosResponse = { data: {}, status: 200, statusText: 'OK', headers: {}, config: {} };
-    mockGet.mockResolvedValue(mockResponse);
-
-    const result = await getDocumentsDetailsApi(
-      institution,
-      txbookinglocation,
-      transactionreference,
-      pagenumber,
-      pagesize,
-      stepnumber,
-      documentid,
-      showhistoryflag
-    );
-
-    expect(mockGet).toHaveBeenCalledWith(`/enquiryprojections/${transactionreference}/documents`, {
-      params: {
-        institution,
-        txbookinglocation,
-        pagenumber,
-        pagesize,
-        stepnumber,
-        documentid,
-        showhistoryflag,
-      },
-    });
-    expect(result).toEqual(mockResponse);
-  });
-
-  // Add similar test cases for remaining functions like getDocumentBatchDetailsApi, getFinancesDetailsApi, etc.
 });
