@@ -1,12 +1,12 @@
-import { getCodeDecode } from './yourModule'; // Replace with the actual module path
-import { exceptionApi } from './api'; // Replace with the actual module path
+import { getCodeDecodeList } from './yourModule'; // Replace with your actual module path
+import { exceptionApi } from './api'; // Replace with your actual module path
 import { AxiosResponse } from 'axios';
 
 jest.mock('./api', () => ({
   exceptionApi: jest.fn(),
 }));
 
-describe('getCodeDecode', () => {
+describe('getCodeDecodeList', () => {
   let mockGet: jest.Mock;
   let mockApi: any;
 
@@ -20,9 +20,9 @@ describe('getCodeDecode', () => {
     jest.clearAllMocks();
   });
 
-  it('should fetch code decode details with correct parameters', async () => {
+  it('should fetch code decode list with correct parameters', async () => {
     const institution = 'Institution1';
-    const codeid = 'Code123';
+    const codeids = ['Code1', 'Code2', 'Code3'];
     const bookinglocation = 'Location1';
     const codevalues = 'Value1';
     const languagecode = 'en';
@@ -36,16 +36,16 @@ describe('getCodeDecode', () => {
     };
     mockGet.mockResolvedValue(mockResponse);
 
-    const result = await getCodeDecode(
+    const result = await getCodeDecodeList(
       institution,
-      codeid,
+      codeids,
       bookinglocation,
       codevalues,
       languagecode
     );
 
     expect(exceptionApi).toHaveBeenCalled();
-    expect(mockGet).toHaveBeenCalledWith(`/codedecodes/${institution}/${codeid}`, {
+    expect(mockGet).toHaveBeenCalledWith(`/codedecodeslist/${institution}/${codeids.join(',')}`, {
       params: {
         bookinglocation,
         codevalues,
@@ -57,17 +57,17 @@ describe('getCodeDecode', () => {
 
   it('should handle API errors gracefully', async () => {
     const institution = 'Institution1';
-    const codeid = 'Code123';
+    const codeids = ['Code1', 'Code2'];
 
     const mockError = {
       response: { status: 404, data: { message: 'Not Found' } },
     };
     mockGet.mockRejectedValue(mockError);
 
-    await expect(getCodeDecode(institution, codeid)).rejects.toEqual(mockError.response);
+    await expect(getCodeDecodeList(institution, codeids)).rejects.toEqual(mockError.response);
 
     expect(exceptionApi).toHaveBeenCalled();
-    expect(mockGet).toHaveBeenCalledWith(`/codedecodes/${institution}/${codeid}`, {
+    expect(mockGet).toHaveBeenCalledWith(`/codedecodeslist/${institution}/${codeids.join(',')}`, {
       params: {
         bookinglocation: undefined,
         codevalues: undefined,
