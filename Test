@@ -1,75 +1,639 @@
-import { getExceptionCatalogue } from './your-file'; // Replace with the actual file name
-import { exceptionApi } from './exceptionApi'; // Replace with the actual import path
+import { AxiosResponse, AxiosRequestConfig } from 'axios';
+import config from '@config';
+import { ISearchFilters, ITransactionResponse, IReprocessAMLActionRequest } from '@interfaces';
+import txnwdApi from '../txnwdApi';
 
-jest.mock('./exceptionApi'); // Mock the exceptionApi module
+import { REQUEST_DETAILS_DATA } from './__mocks__/data/requestdetails';
 
-describe('getExceptionCatalogue', () => {
-  it('should fetch and return exception catalog data', async () => {
-    // Mock response data
-    const mockResponse = { data: { success: true, items: [] } };
+const getTXNs = (filterData: ISearchFilters, pageNumber: number, pageSize: number, txPersonas: string, stage: string): Promise<any> => {
+  const data = {
+    pageNumber,
+    pageSize,
+    transactionReference: filterData.txnNumber,
+    transactionWorkflowId: '',
+    transactionWorkflowStage: filterData.transactionWorkflowStage,
+    txBookingLocation: filterData.bookingLocation,
+    acknowledgementNumber: filterData.ackNumber,
+    submissionMode: filterData.submissionMode,
+    fromDate: filterData.fromDateWithTime,
+    toDate: filterData.toDateWithTime,
+    product: filterData.product,
+    step: filterData.step,
+    subStep: filterData.subStep,
+    stepNumber: filterData.stepNumber,
+    customerID: filterData.generatedBy,
+    txpersonas: txPersonas,
+    exceptionWorkflowStage: stage,
+    amlStatus: filterData.amlStatus,
+    lliStatus: filterData.lliStatus,
+    callbackStatus: filterData.callbackStatus,
+    sanctionStatus: filterData.sanctionStatus,
+    clientReference: filterData.clientReference
+  };
+  return txnwdApi()
+    .then(api => api.get(`/transactionworkflowdetails`, { params: data })
+      .then((response: AxiosResponse) => response.data));
+};
 
-    // Mock the exceptionApi.get method
-    const mockGet = jest.fn().mockResolvedValue(mockResponse);
-    (exceptionApi as jest.Mock).mockResolvedValue({
-      get: mockGet,
-    });
+const getTXN = (transactionReference: string, step?: string, subStep?: string, stepNumber?: string): Promise<any> => {
+  const data = {
+    pageNumber: 0,
+    pageSize: 1,
+    transactionReference,
+    step,
+    subStep,
+    stepNumber
+  };
+  return txnwdApi().then(api => api.get(`/transactionworkflowdetails`, { params: data })
+    .then((response: AxiosResponse) => response));
+};
 
-    // Test inputs
-    const txPersona = 'testPersona';
-    const stage = 'testStage';
-    const pageNumber = 1;
-    const pageSize = 10;
-    const transactionReference = 'testTransaction';
+export const postMenulist = (
+  institution: string,
+  parameterID: string,
+  bookingLocation: string,
+  product: string,
+  step: string,
+  subStep: string,
+): Promise<any> => {
+  const request = {
+    parameterKeyDetails: {
+      key1: bookingLocation,
+      key2: product,
+      key3: step,
+      key4: subStep,
+    }
+  };
+  return txnwdApi().then(api => {
+    return api.post(`/parameters/${institution}/${parameterID}/${config.option}/data/search`, { ...request })
+      .then((response: AxiosResponse) => response.data);
+  });
+};
 
-    // Call the function
-    const result = await getExceptionCatalogue(
-      txPersona,
-      stage,
+
+const getRequestDetails = (txnId: string): Promise<any> => {
+  return Promise.resolve(REQUEST_DETAILS_DATA)
+}
+
+const postRequestDetails = (data: any): Promise<any> => {
+  return Promise.resolve({ stepId: '123' });
+}
+
+export {
+  getTXNs,
+  getTXN,
+  getRequestDetails,
+  postRequestDetails,
+};
+
+
+const getApi = (endpoint: string, config?: AxiosRequestConfig): Promise<ITransactionResponse> => {
+  return txnwdApi().then(api => api.get(endpoint, config)
+    .then((response: AxiosResponse) => response))
+    .catch((error: any) => { throw error; });
+};
+
+const postApi = (endpoint: string, data?: any, config?: AxiosRequestConfig): Promise<ITransactionResponse> => {
+  return txnwdApi().then(api => api.post(endpoint, data, config)
+    .then((response: AxiosResponse) => response))
+    .catch((error: any) => { throw error; });
+};
+
+/** Transaction Details */
+export const getTransactionDetailsApi = (transactionreference: string): Promise<ITransactionResponse> => {
+  return getApi(`/enquiryprojections/${transactionreference}/transaction`);
+};
+
+/** General Details */
+export const getGeneralDetailsAPI = (
+  institution: string,
+  txbookinglocation: string,
+  transactionreference: string,
+  pagenumber: number,
+  pagesize: number,
+  stepnumber?: string
+): Promise<ITransactionResponse> => {
+  return getApi(`/enquiryprojections/${transactionreference}/transactionstepdetails`, {
+    params: {
+      institution,
+      txbookinglocation,
+      pagenumber,
+      pagesize,
+      stepnumber
+    }
+  });
+};
+
+/* get for Transaction Pre Processing */
+export const getTransactionPreProcessingApi = (
+  institution: string,
+  splitRequestID: string,
+): Promise<ITransactionResponse> => {
+  return getApi(`/clientrequests/requestsplitter/split/${splitRequestID}/transactiondetails`, {
+    params: {
+      institution,
+    }
+  });
+};
+
+/** Documents Details */
+export const getDocumentsDetailsApi = (
+  institution: string,
+  txbookinglocation: string,
+  transactionreference: string,
+  pagenumber: number,
+  pagesize: number,
+  stepnumber?: string,
+  documentid?: string,
+  showhistoryflag?: string,
+): Promise<ITransactionResponse> => {
+  return getApi(`/enquiryprojections/${transactionreference}/documents`, {
+    params: {
+      institution,
+      txbookinglocation,
+      pagenumber,
+      pagesize,
+      stepnumber,
+      documentid,
+      showhistoryflag
+    }
+  });
+};
+
+/** Document Batch Details */
+export const getDocumentBatchDetailsApi = (
+  institution: string,
+  txbookinglocation: string,
+  transactionreference: string,
+  stepnumber: string,
+): Promise<ITransactionResponse> => {
+  return getApi(`/enquiryprojections/${transactionreference}/documentbatchdetails`, {
+    params: {
+      institution,
+      txbookinglocation,
+      stepnumber
+    }
+  });
+};
+
+/** Finances Details */
+export const getFinancesDetailsApi = (
+  institution: string,
+  txbookinglocation: string,
+  transactionreference: string,
+  stepnumber?: string,
+  financeid?: string,
+  financenumber?: string,
+  showhistoryflag?: string,
+): Promise<ITransactionResponse> => {
+  return getApi(`/enquiryprojections/${transactionreference}/finances`, {
+    params: {
+      institution,
+      txbookinglocation,
+      financeid,
+      financenumber,
+      showhistoryflag: 'Y',
+      stepnumber
+    }
+  });
+};
+
+/** FEV Finances Details */
+export const getFevFinancesDetailsApi = (
+  institution: string,
+  txbookinglocation: string,
+  transactionreference: string,
+  stepnumber?: string,
+  financeid?: string,
+  financenumber?: string,
+  showhistoryflag?: string,
+): Promise<ITransactionResponse> => {
+  return getApi(`/fev/transactions/${transactionreference}/transactionfinances`, {
+    params: {
+      institution,
+      txbookinglocation,
+      financeid,
+      financenumber,
+      showhistoryflag: 'Y',
+      stepnumber
+    }
+  });
+};
+
+/** Journal Details */
+export const getJournalDetailsApi = (
+  institution: string,
+  txbookinglocation: string,
+  transactionReference: string,
+  stepnumber?: string,
+): Promise<ITransactionResponse> => {
+  return getApi(`/enquiryprojections/${transactionReference}/consolidatedjournallist`, {
+    params: {
+      institution,
+      txbookinglocation,
+      stepnumber
+    }
+  });
+};
+
+/** Margin Details */
+export const getMarginDetailsApi = (
+  institution: string,
+  txbookinglocation: string,
+  transactionreference: string,
+  stepnumber?: string,
+): Promise<ITransactionResponse> => {
+  return getApi(`/enquiryprojections/${transactionreference}/margindetails`, {
+    params: {
+      institution,
+      txbookinglocation,
+      stepnumber
+    }
+  });
+};
+
+/** Party Details */
+export const getPartyDetailsApi = (
+  institution: string,
+  txbookinglocation: string,
+  transactionreference: string,
+  stepnumber?: string,
+): Promise<ITransactionResponse> => {
+  return getApi(`/enquiryprojections/${transactionreference}/partydetails`, {
+    params: {
+      institution,
+      txbookinglocation,
+      stepnumber
+    }
+  });
+};
+
+/** Tax Details */
+export const postTaxDetailsApi = (
+  institution: string,
+  txbookinglocation: string,
+  transactionreference: string,
+  stepnumber?: string
+): Promise<ITransactionResponse> => {
+  return postApi(`/enquiryprojections/taxdetails`, {
+    institution,
+    txbookinglocation,
+    transactionreference,
+    stepnumber
+  });
+};
+
+/** Charges Details */
+// export const getChargesDetailsApi = (
+//   institution: string,
+//   txbookinglocation: string,
+//   transactionreference: string,
+//   stepnumber?: string
+// ): Promise<ITransactionResponse> => {
+//   return getApi(`/enquiryprojections/${transactionreference}/charges`, {
+//     params: {
+//       institution,
+//       txbookinglocation,
+//       stepnumber
+//     }
+//   });
+// };
+export const getChargesDetailsApi = (
+  institution: string,
+  transactionreference: string,
+  stepnumber?: string
+): Promise<ITransactionResponse> => {
+  return getApi(`/enquiryprojections/${transactionreference}/chargedetails`, {
+    params: {
+      institution,
+      stepnumber
+    }
+  });
+};
+
+export const getDeliveryDocumentDetailsApi = (
+  institution: string,
+  transactionreference: string,
+  splitRequestID: string,
+  stepNumber: string,
+  txBookingLocation: string,
+): Promise<ITransactionResponse> => {
+  return getApi(`/enquiryprojections/${transactionreference}/deliverydocumentdetails`, {
+    params: {
+      institution,
+      stepNumber,
+      txBookingLocation
+    }
+  });
+};
+
+/** Disbursement Details */
+export const getDisbursementDetailsApi = (
+  institution: string,
+  txbookinglocation: string,
+  transactionreference: string,
+  stepnumber: string
+): Promise<ITransactionResponse> => {
+  return getApi(`/enquiryprojections/${transactionreference}/disbursementdetails`, {
+    params: {
+      institution,
+      txbookinglocation,
+      stepnumber
+    }
+  });
+};
+
+/** post Update Split Header API */
+export const postUpdateSplitHeaderApi = (payload: any): Promise<ITransactionResponse> => {
+  return postApi(`/clientrequests/requestsplitter/updatesplitheader`, payload);
+};
+
+/** post Update FEV API */
+export const postUpdateFevSplitHeaderApi = (payload: any): Promise<ITransactionResponse> => {
+  return postApi(`/clientrequests/requestsplitter/fevsplitforexceptions`, payload);
+};
+
+/** post Document Details API */
+export const postUpdateDocumentDetailsApi = (payload: any): Promise<ITransactionResponse> => {
+  return postApi(`/clientrequests/requestsplitter/documentsforexceptions`, payload);
+};
+
+/** post Stage Movement API */
+export const postStageMovementApi = (payload: any): Promise<ITransactionResponse> => {
+  return postApi(`/exceptionstagemovement`, payload);
+};
+
+/** post Manual Stage Movement API */
+export const postManualStageMovementApi = (payload: any): Promise<ITransactionResponse> => {
+  return postApi(`/transactions/stagemovement`, payload);
+};
+
+/** reprocess AML Details */
+export const postReprocessAMLActionApi = (data: IReprocessAMLActionRequest): Promise<ITransactionResponse> => {
+  return postApi(`/reprocessonamlaction`, { data });
+};
+
+/** Get WorkBasket Transaction API */
+export const getWorkBasketTransactionApi = (
+  transactionReference: string,
+  stepnumber: string
+): Promise<ITransactionResponse> => {
+  return getApi(`/workbasket/${transactionReference}-${stepnumber}/transactions`);
+};
+
+/** Get WorkBasket Document Details API */
+export const getWorkBasketDocumentDetailsApi = (
+  transactionReference: string,
+  stepnumber: string,
+  pageNumber: number,
+  pageSize: number
+): Promise<ITransactionResponse> => {
+  return getApi(`/workbasket/${transactionReference}-${stepnumber}/documents/${pageNumber}/${pageSize}`);
+};
+
+/** post WorkBasket Transaction API */
+export const postUpdateWorkBasketTransactionApi = (payload: any): Promise<ITransactionResponse> => {
+  return postApi(`/workbasket/transactions/transactionDetails`, payload);
+};
+
+/** post WorkBasket FEV Transaction API */
+export const postUpdateWorkBasketFevTransactionApi = (payload: any): Promise<ITransactionResponse> => {
+  return postApi(`/fev/transactions/transactionDetails`, payload);
+};
+
+/** post WorkBasket Document Details API */
+export const postUpdateWorkBasketDocumentDetailsApi = (payload: any): Promise<ITransactionResponse> => {
+  return postApi(`/workbasket/transactions/documents`, payload);
+};
+
+/** post WorkBasket Change Delete API */
+export const postUpdateWorkBasketChangeDeleteApi = (payload: any): Promise<ITransactionResponse> => {
+  return postApi(`transactionchangedelete`, payload);
+};
+
+/** post Update Locked By User API */
+export const postUpdateLockedByUserApi = (payload: any): Promise<ITransactionResponse> => {
+  return postApi(`clientrequests/workflows/transactions/transactionassignment`, payload);
+};
+
+/** post File Upload API */
+export const postFileUploadAPI = (payload: any): Promise<ITransactionResponse> => {
+  return postApi(`clientrequests/workflows/transactions/workflowfiledetails`, payload);
+};
+
+/* get for Advices API */
+export const getAdvicesApi = (
+  institution: string,
+  txbookinglocation: string,
+  transactionreference: string,
+  stepnumber: string
+): Promise<ITransactionResponse> => {
+  return getApi(`/enquiryprojections/${transactionreference}/advicegenerateddetail`, {
+    params: {
+      institution,
+      txbookinglocation,
+      stepnumber
+    }
+  });
+};
+
+/* get for Limit Details API */
+export const getLimitDetailsApi = (
+  institution: string,
+  txbookinglocation: string,
+  transactionreference: string,
+  stepnumber: string
+): Promise<ITransactionResponse> => {
+  return getApi(`/enquiryprojections/${transactionreference}/limitresponsedetails`, {
+    params: {
+      institution,
+      txbookinglocation,
+      stepnumber
+    }
+  });
+};
+
+/* get for Limit Details For Pending Referral API */
+export const getLimitDetailsForPendingReferralApi = (payload: any): Promise<ITransactionResponse> => {
+  return postApi(`/enquiryprojections/ltplimitdetails`, payload);
+};
+
+/** post Update Locked By User API */
+export const postHouseKeepingDetailsApi = (payload: any): Promise<ITransactionResponse> => {
+  return postApi(`posthousekeepingdetails`, payload);
+};
+
+/* get for SHI condition Details API */
+export const getSHIConditionDetailsApi = (
+  customerID: string,
+  institution: string,
+  txbookinglocation: string,
+): Promise<ITransactionResponse> => {
+  return getApi(`customers/customerSHI`, {
+    params: {
+      customerID,
+      institution,
+      txbookinglocation
+    }
+  });
+};
+
+/* For BTC Text Details API */
+export const getBTCTextDetailsApi = (
+  customerID: string,
+  institution: string,
+  txBookingLocation: string,
+  financeType: string,
+  limitGroupID: string
+): Promise<ITransactionResponse> => {
+  return getApi(`bcaterms/retrieveBCATerms`, {
+    params: {
+      customerID,
+      institution,
+      txBookingLocation,
+      financeType,
+      limitGroupID
+    }
+  });
+};
+
+/* For fetching the file details genearted from uploaded through manual registration */
+export const getWorkflowFileDetailsApi = (
+  transactionReference: string,
+  stepNumber: string
+): Promise<ITransactionResponse> => {
+  return getApi(`/transactions/${transactionReference}/workflowfiledetails/${stepNumber}`, {
+
+  });
+};
+
+/* For fetching checker limit details*/
+export const getCheckerLimitDetailsApi = (
+   userid: number,
+   institution: string,
+   country: string,
+   product: string,
+   txncurrency: string,
+   txbookinglocation: string,
+): Promise<ITransactionResponse> => {
+  return getApi(`domain/tx/v1/users/${userid}/authoritylimits`, {
+    params: {
+      institution,
+      country,
+      product,
+      txncurrency,
+      txbookinglocation,
+    }
+  });
+};
+
+/* For fetching the file details genearted from uploaded through manual registration */
+
+export const getLatestMakerDetailsApi = (
+  txBookingLocation: string,
+  transactionReference: string,
+  stepNumber: string,
+): Promise<ITransactionResponse> => {
+  return getApi(`clientrequests/workflows/exceptions/${transactionReference}/latestmakerdetails`, {
+    params: {
+      txBookingLocation,
+      stepNumber,
+    }
+  });
+};
+
+/* get for SCPay Details API */
+export const getSCPayPostingDetailsApi = (
+  institution: string,
+  txbookinglocation: string,
+  transactionreference: string,
+  stepnumber: string
+): Promise<ITransactionResponse> => {
+  return getApi(`/enquiryprojections/${transactionreference}/scpaypostingdetails`, {
+    params: {
+      institution,
+      txbookinglocation,
+      stepnumber
+    }
+  });
+};
+
+/* For fetching the file download */
+export const getFiledownloadApi = (fileId: string): Promise<ITransactionResponse> => {
+  return txnwdApi().then(api => api.get(`/filedownload?fileId=${fileId}`, { responseType: 'blob' })
+    .then((response: AxiosResponse) => response))
+    .catch((error: any) => { throw error; });
+};
+
+export const getDocumentsDetailsPreProcessingApi = (
+  splitRequestID: string,
+  institution,
+  pageNumber,
+  pageSize
+): Promise<ITransactionResponse> => {
+  return getApi(`/clientrequests/requestsplitter/split/${splitRequestID}/documentdetails`, {
+    params: {
+      institution,
       pageNumber,
       pageSize,
-      transactionReference
-    );
+    },
+  });
+};
 
-    // Assertions
-    expect(exceptionApi).toHaveBeenCalledTimes(1); // Ensure exceptionApi is called once
-    expect(mockGet).toHaveBeenCalledWith(
-      `exceptioncatalogue/${txPersona}/${stage}`,
-      {
-        params: {
-          txbookinglocation: 'config-userBookingLocation', // Update if this is dynamic
-          transactionreference: transactionReference,
-          exceptionworkflowid: "'",
-          pagenumber: pageNumber,
-          pagesize: pageSize,
-        },
-      }
-    );
-    expect(result).toEqual(mockResponse.data); // Ensure the result matches the mock response
+/* get customer account Details API */
+export const getCustomerPeferenceDetailsApi = (
+  customerID: string,
+  institution: string,
+  txbookinglocation: string,
+): Promise<ITransactionResponse> => {
+  return getApi(`customers/customerpreference`, {
+    params: {
+      customerID,
+      institution,
+      txbookinglocation
+    }
+  });
+};
+
+/* get booking location onboarding query Details API */
+export const getBookingLocationOnBoardingDetailsApi = (
+  institution: string,
+  txbookinglocation: string,
+): Promise<ITransactionResponse> => {
+  return getApi(`bookinglocations/onboarding/query`, {
+    params: {
+      institution,
+      txbookinglocation
+    }
+  });
+};
+
+//letter of credit details
+export const getLetterOfCreditDetails = (
+  institution: string,
+  transactionreference: string,
+  stepnumber?: string,
+  stepAssociationId?: string
+): Promise<ITransactionResponse> => {
+  return getApi(`/enquiryprojections/lcdetails`, {
+    params: {
+      institution,
+      stepnumber,
+      stepAssociationId
+    }
+  });
+};
+
+export const getBusinessDateDetailsApi = async (
+  institution: string,
+  txbookinglocation: string,
+): Promise<ITransactionResponse> => {
+  return getApi(`bookinglocations/businessdate`, {
+    params: {
+      institution,
+      txbookinglocation,
+    }
   });
 
-  it('should throw an error if the API call fails', async () => {
-    // Mock the exceptionApi.get method to throw an error
-    const mockGet = jest.fn().mockRejectedValue(new Error('API Error'));
-    (exceptionApi as jest.Mock).mockResolvedValue({
-      get: mockGet,
-    });
-
-    // Test inputs
-    const txPersona = 'testPersona';
-    const stage = 'testStage';
-    const pageNumber = 1;
-    const pageSize = 10;
-    const transactionReference = 'testTransaction';
-
-    // Call the function and expect it to throw
-    await expect(
-      getExceptionCatalogue(
-        txPersona,
-        stage,
-        pageNumber,
-        pageSize,
-        transactionReference
-      )
-    ).rejects.toThrow('API Error');
-  });
-});
+  
+}
