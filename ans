@@ -1,0 +1,103 @@
+import { getTXNs } from './yourModule'; // Replace with the correct path to your module
+import { txnwdApi } from './api'; // Replace with the correct path to your API module
+import { AxiosResponse } from 'axios';
+
+// Mock the API module
+jest.mock('./api', () => ({
+  txnwdApi: jest.fn(),
+}));
+
+describe('getTXNs', () => {
+  it('should call the API with correct parameters and return response data', async () => {
+    // Mock the API and response
+    const mockGet = jest.fn();
+    const mockApi = { get: mockGet };
+    (txnwdApi as jest.Mock).mockResolvedValue(mockApi);
+
+    const mockResponse: AxiosResponse = {
+      data: { transactions: [] }, // Mock response data
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      config: {},
+    };
+    mockGet.mockResolvedValue(mockResponse);
+
+    // Test input parameters
+    const filterData = {
+      txnNumber: 'TX123',
+      transactionWorkflowStage: 'Stage1',
+      bookingLocation: 'Location1',
+      ackNumber: 'ACK123',
+      submissionMode: 'Online',
+      fromDateWithTime: '2024-11-01T00:00:00Z',
+      toDateWithTime: '2024-11-25T23:59:59Z',
+      product: 'Product1',
+      step: 'Step1',
+      subStep: 'SubStep1',
+      stepNumber: 1,
+      generatedBy: 'Customer123',
+      amlStatus: 'AML Approved',
+      lliStatus: 'LLI Pending',
+      callbackStatus: 'Callback Done',
+      sanctionStatus: 'Sanction Pending',
+      clientReference: 'REF123',
+    };
+    const pageNumber = 1;
+    const pageSize = 10;
+    const txPersonas = 'Persona1';
+    const stage = 'Stage2';
+
+    // Call the function
+    const result = await getTXNs(filterData, pageNumber, pageSize, txPersonas, stage);
+
+    // Assertions
+    expect(txnwdApi).toHaveBeenCalledTimes(1); // Ensure the API is called
+    expect(mockGet).toHaveBeenCalledWith('/transactionworkflowdetails', {
+      params: {
+        pageNumber,
+        pageSize,
+        transactionReference: filterData.txnNumber,
+        transactionWorkflowId: '',
+        transactionWorkflowStage: filterData.transactionWorkflowStage,
+        txBookingLocation: filterData.bookingLocation,
+        acknowledgementNumber: filterData.ackNumber,
+        submissionMode: filterData.submissionMode,
+        fromDate: filterData.fromDateWithTime,
+        toDate: filterData.toDateWithTime,
+        product: filterData.product,
+        step: filterData.step,
+        subStep: filterData.subStep,
+        stepNumber: filterData.stepNumber,
+        customerID: filterData.generatedBy,
+        txpersonas: txPersonas,
+        exceptionWorkflowStage: stage,
+        amlStatus: filterData.amlStatus,
+        lliStatus: filterData.lliStatus,
+        callbackStatus: filterData.callbackStatus,
+        sanctionStatus: filterData.sanctionStatus,
+        clientReference: filterData.clientReference,
+      },
+    });
+
+    // Ensure the result is correct
+    expect(result).toEqual(mockResponse.data);
+  });
+
+  it('should throw an error if the API call fails', async () => {
+    const mockError = new Error('API call failed');
+    const mockGet = jest.fn().mockRejectedValue(mockError);
+    const mockApi = { get: mockGet };
+    (txnwdApi as jest.Mock).mockResolvedValue(mockApi);
+
+    const filterData = {}; // Simplified for this test
+    const pageNumber = 1;
+    const pageSize = 10;
+    const txPersonas = 'Persona1';
+    const stage = 'Stage2';
+
+    await expect(getTXNs(filterData, pageNumber, pageSize, txPersonas, stage)).rejects.toThrow(
+      'API call failed'
+    );
+  });
+});
