@@ -101,3 +101,193 @@ describe('getTXNs', () => {
     );
   });
 });
+
+import { 
+  getTXN, 
+  postMenulist, 
+  getTransactionDetailsApi, 
+  getGeneralDetailsAPI, 
+  getTransactionPreProcessingApi, 
+  getDocumentsDetailsApi, 
+  getDocumentBatchDetailsApi, 
+  getFinancesDetailsApi, 
+  getFevFinancesDetailsApi, 
+  getJournalDetailsApi, 
+  getMarginDetailsApi, 
+  getPartyDetailsApi 
+} from './yourModule'; // Replace with the correct module path
+
+import { txnwdApi } from './api'; // Replace with the correct API module path
+import { AxiosResponse } from 'axios';
+
+jest.mock('./api', () => ({
+  txnwdApi: jest.fn(),
+}));
+
+describe('API Tests', () => {
+  let mockGet: jest.Mock;
+  let mockPost: jest.Mock;
+  let mockApi: any;
+
+  beforeEach(() => {
+    mockGet = jest.fn();
+    mockPost = jest.fn();
+    mockApi = { get: mockGet, post: mockPost };
+    (txnwdApi as jest.Mock).mockResolvedValue(mockApi);
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('getTXN should call API with correct parameters', async () => {
+    const transactionReference = 'TRX123';
+    const step = 'Step1';
+    const subStep = 'SubStep1';
+    const stepNumber = '1';
+
+    const mockResponse: AxiosResponse = { data: {}, status: 200, statusText: 'OK', headers: {}, config: {} };
+    mockGet.mockResolvedValue(mockResponse);
+
+    const result = await getTXN(transactionReference, step, subStep, stepNumber);
+
+    expect(mockGet).toHaveBeenCalledWith('/transactionworkflowdetails', {
+      params: {
+        pageNumber: 0,
+        pageSize: 1,
+        transactionReference,
+        step,
+        subStep,
+        stepNumber,
+      },
+    });
+    expect(result).toEqual(mockResponse);
+  });
+
+  test('postMenulist should call API with correct parameters', async () => {
+    const institution = 'Inst1';
+    const parameterID = 'Param123';
+    const bookingLocation = 'Location1';
+    const product = 'Product1';
+    const step = 'Step1';
+    const subStep = 'SubStep1';
+
+    const mockResponse: AxiosResponse = { data: {}, status: 200, statusText: 'OK', headers: {}, config: {} };
+    mockPost.mockResolvedValue(mockResponse);
+
+    const result = await postMenulist(institution, parameterID, bookingLocation, product, step, subStep);
+
+    expect(mockPost).toHaveBeenCalledWith(
+      `/parameters/${institution}/${parameterID}/undefined/data/search`,
+      {
+        parameterKeyDetails: {
+          key1: bookingLocation,
+          key2: product,
+          key3: step,
+          key4: subStep,
+        },
+      }
+    );
+    expect(result).toEqual(mockResponse.data);
+  });
+
+  test('getTransactionDetailsApi should call API with correct endpoint', async () => {
+    const transactionreference = 'TRX123';
+    const mockResponse: AxiosResponse = { data: {}, status: 200, statusText: 'OK', headers: {}, config: {} };
+    mockGet.mockResolvedValue(mockResponse);
+
+    const result = await getTransactionDetailsApi(transactionreference);
+
+    expect(mockGet).toHaveBeenCalledWith(`/enquiryprojections/${transactionreference}/transaction`);
+    expect(result).toEqual(mockResponse);
+  });
+
+  test('getGeneralDetailsAPI should call API with correct parameters', async () => {
+    const institution = 'Inst1';
+    const txbookinglocation = 'Location1';
+    const transactionreference = 'TRX123';
+    const pagenumber = 1;
+    const pagesize = 10;
+    const stepnumber = 'Step123';
+
+    const mockResponse: AxiosResponse = { data: {}, status: 200, statusText: 'OK', headers: {}, config: {} };
+    mockGet.mockResolvedValue(mockResponse);
+
+    const result = await getGeneralDetailsAPI(
+      institution,
+      txbookinglocation,
+      transactionreference,
+      pagenumber,
+      pagesize,
+      stepnumber
+    );
+
+    expect(mockGet).toHaveBeenCalledWith(`/enquiryprojections/${transactionreference}/transactionstepdetails`, {
+      params: {
+        institution,
+        txbookinglocation,
+        pagenumber,
+        pagesize,
+        stepnumber,
+      },
+    });
+    expect(result).toEqual(mockResponse);
+  });
+
+  test('getTransactionPreProcessingApi should call API with correct parameters', async () => {
+    const institution = 'Inst1';
+    const splitRequestID = 'REQ123';
+
+    const mockResponse: AxiosResponse = { data: {}, status: 200, statusText: 'OK', headers: {}, config: {} };
+    mockGet.mockResolvedValue(mockResponse);
+
+    const result = await getTransactionPreProcessingApi(institution, splitRequestID);
+
+    expect(mockGet).toHaveBeenCalledWith(`/clientrequests/requestsplitter/split/${splitRequestID}/transactiondetails`, {
+      params: {
+        institution,
+      },
+    });
+    expect(result).toEqual(mockResponse);
+  });
+
+  test('getDocumentsDetailsApi should call API with correct parameters', async () => {
+    const institution = 'Inst1';
+    const txbookinglocation = 'Location1';
+    const transactionreference = 'TRX123';
+    const pagenumber = 1;
+    const pagesize = 10;
+    const stepnumber = 'Step123';
+    const documentid = 'Doc123';
+    const showhistoryflag = 'Y';
+
+    const mockResponse: AxiosResponse = { data: {}, status: 200, statusText: 'OK', headers: {}, config: {} };
+    mockGet.mockResolvedValue(mockResponse);
+
+    const result = await getDocumentsDetailsApi(
+      institution,
+      txbookinglocation,
+      transactionreference,
+      pagenumber,
+      pagesize,
+      stepnumber,
+      documentid,
+      showhistoryflag
+    );
+
+    expect(mockGet).toHaveBeenCalledWith(`/enquiryprojections/${transactionreference}/documents`, {
+      params: {
+        institution,
+        txbookinglocation,
+        pagenumber,
+        pagesize,
+        stepnumber,
+        documentid,
+        showhistoryflag,
+      },
+    });
+    expect(result).toEqual(mockResponse);
+  });
+
+  // Add similar test cases for remaining functions like getDocumentBatchDetailsApi, getFinancesDetailsApi, etc.
+});
