@@ -1,5 +1,41 @@
 
-    import React from 'react';
+  import TransactionWorkDeskLCDetailsData from './TransactionWorkDeskLCDetailsData';
+import { LCDetailMT700 } from './LCDetailMT700';
+import { LCDetailsFS } from './LCDetailsFrontendSample';
+import {
+  LetterOfCreditNumberELC,
+  SenderBankDetailsELC,
+} from 'src/utils/TxwdLCDetails';
+
+jest.mock('./LCDetailMT700', () => ({
+  LCDetailMT700: {
+    letterOfCreditDetails: {
+      generalLetterOfCreditDetails: { test: 'generalData' },
+      letterOfCreditNumber: { test: 'creditNumber' },
+      senderBankDetails: { test: 'senderBank' },
+    },
+  },
+}));
+
+jest.mock('./LCDetailsFrontendSample', () => ({
+  LCDetailsFS: { test: 'frontendSample' },
+}));
+
+jest.mock('src/utils/TxwdLCDetails', () => ({
+  LetterOfCreditNumberELC: jest.fn(() => ({ letterOfCreditNumberData: { mockKey: 'mockValue' } })),
+  SenderBankDetailsELC: jest.fn(() => ({ senderBankDetails: { mockKey: 'mockValue' } })),
+}));
+
+describe('TransactionWorkDeskLCDetailsData', () => {
+  it('should merge and return the correct data', () => {
+    const result = TransactionWorkDeskLCDetailsData();
+
+    expect(result.letterOfCreditDetails.letterOfCreditNumber.mockKey).toBe('mockValue');
+    expect(result.letterOfCreditDetails.senderBankDetails.mockKey).toBe('mockValue');
+    expect(LetterOfCreditNumberELC).toHaveBeenCalledWith(LCDetailsFS);
+    expect(SenderBankDetailsELC).toHaveBeenCalledWith(LCDetailsFS, LCDetailMT700.letterOfCreditDetails.generalLetterOfCreditDetails);
+  });
+});  import React from 'react';
 import { render } from '@testing-library/react';
 import { txnWorkdeskContext } from '@store';
 import ContextProvider from './ContextProvider'; // Replace with the correct path
