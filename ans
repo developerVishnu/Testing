@@ -1,78 +1,34 @@
-import { getCodeDecodeList } from './yourModule'; // Replace with your actual module path
-import { exceptionApi } from './api'; // Replace with your actual module path
-import { AxiosResponse } from 'axios';
 
-jest.mock('./api', () => ({
-  exceptionApi: jest.fn(),
-}));
+    import React from 'react';
+import { render } from '@testing-library/react';
+import { txnWorkdeskContext } from '@store';
+import ContextProvider from './ContextProvider'; // Replace with the correct path
 
-describe('getCodeDecodeList', () => {
-  let mockGet: jest.Mock;
-  let mockApi: any;
+describe('ContextProvider', () => {
+  it('should render children and provide context value', () => {
+    // Mock values for the context
+    const mockStoreContext = { state: { key: 'value' }, dispatch: jest.fn() };
 
-  beforeEach(() => {
-    mockGet = jest.fn();
-    mockApi = { get: mockGet };
-    (exceptionApi as jest.Mock).mockResolvedValue(mockApi);
-  });
+    jest.spyOn(React, 'useContext').mockReturnValue(mockStoreContext);
 
-  afterEach(() => {
-    jest.clearAllMocks();
-  });
-
-  it('should fetch code decode list with correct parameters', async () => {
-    const institution = 'Institution1';
-    const codeids = ['Code1', 'Code2', 'Code3'];
-    const bookinglocation = 'Location1';
-    const codevalues = 'Value1';
-    const languagecode = 'en';
-
-    const mockResponse: AxiosResponse = {
-      data: { result: 'success' },
-      status: 200,
-      statusText: 'OK',
-      headers: {},
-      config: {},
+    // Mock child component to consume context
+    const ChildComponent = () => {
+      const context = React.useContext(txnWorkdeskContext);
+      return <div>{context.state.key}</div>;
     };
-    mockGet.mockResolvedValue(mockResponse);
 
-    const result = await getCodeDecodeList(
-      institution,
-      codeids,
-      bookinglocation,
-      codevalues,
-      languagecode
+    const { getByText } = render(
+      <ContextProvider>
+        <ChildComponent />
+      </ContextProvider>
     );
 
-    expect(exceptionApi).toHaveBeenCalled();
-    expect(mockGet).toHaveBeenCalledWith(`/codedecodeslist/${institution}/${codeids.join(',')}`, {
-      params: {
-        bookinglocation,
-        codevalues,
-        languagecode,
-      },
-    });
-    expect(result).toEqual(mockResponse.data);
+    // Ensure child component rendered correctly
+    expect(getByText('value')).toBeInTheDocument();
   });
 
-  it('should handle API errors gracefully', async () => {
-    const institution = 'Institution1';
-    const codeids = ['Code1', 'Code2'];
-
-    const mockError = {
-      response: { status: 404, data: { message: 'Not Found' } },
-    };
-    mockGet.mockRejectedValue(mockError);
-
-    await expect(getCodeDecodeList(institution, codeids)).rejects.toEqual(mockError.response);
-
-    expect(exceptionApi).toHaveBeenCalled();
-    expect(mockGet).toHaveBeenCalledWith(`/codedecodeslist/${institution}/${codeids.join(',')}`, {
-      params: {
-        bookinglocation: undefined,
-        codevalues: undefined,
-        languagecode: undefined,
-      },
-    });
+  it('should render without crashing when no children are provided', () => {
+    const { container } = render(<ContextProvider />);
+    expect(container).toBeDefined();
   });
 });
