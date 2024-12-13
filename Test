@@ -1,4 +1,4 @@
-import {inject} from '@loopback/context';
+import {expect} from '@loopback/testlab';
 import {
   FindRoute,
   InvokeMethod,
@@ -7,29 +7,64 @@ import {
   RequestContext,
   RestBindings,
   Send,
-  SequenceHandler,
 } from '@loopback/rest';
- 
-const SequenceActions = RestBindings.SequenceActions;
- 
-export class MySequence implements SequenceHandler {
-  constructor(
-    @inject(SequenceActions.FIND_ROUTE) protected findRoute: FindRoute,
-    @inject(SequenceActions.PARSE_PARAMS) protected parseParams: ParseParams,
-    @inject(SequenceActions.INVOKE_METHOD) protected invoke: InvokeMethod,
-    @inject(SequenceActions.SEND) public send: Send,
-    @inject(SequenceActions.REJECT) public reject: Reject,
-  ) {}
- 
-  async handle(context: RequestContext) {
-    try {
-      const {request, response} = context;
-      const route = this.findRoute(request);
-      const args = await this.parseParams(request, route);
-      const result = await this.invoke(route, args);
-      this.send(response, result);
-    } catch (err) {
-      this.reject(context, err);
-    }
-  }
-}
+import {MySequence} from '../path-to-your-sequence'; // Update with the actual path
+
+describe('MySequence', () => {
+  let sequence: MySequence;
+  let findRoute: FindRoute;
+  let parseParams: ParseParams;
+  let invoke: InvokeMethod;
+  let send: Send;
+  let reject: Reject;
+
+  beforeEach(() => {
+    findRoute = jest.fn().mockReturnValue(() => {});
+    parseParams = jest.fn().mockResolvedValue([]);
+    invoke = jest.fn().mockResolvedValue('test-result');
+    send = jest.fn();
+    reject = jest.fn();
+
+    sequence = new MySequence(findRoute, parseParams, invoke, send, reject);
+  });
+
+  it('handles a successful request', async () => {
+    const request = {method: 'GET', url: '/test'} as any;
+    const response = {} as any;
+
+    const context = {
+      request,
+      response,
+    } as RequestContext;
+
+    // Execute the sequence
+    await sequence.handle(context);
+
+    // Assert the flow
+    expect(findRoute).toHaveBeenCalledWith(request);
+    expect(parseParams).toHaveBeenCalled();
+    expect(invoke).toHaveBeenCalled();
+    expect(send).toHaveBeenCalledWith(response, 'test-result');
+  });
+
+  it('handles errors by calling reject', async () => {
+    const request = {method: 'GET', url: '/test'} as any;
+    const response = {} as any;
+
+    const context = {
+      request,
+      response,
+    } as RequestContext;
+
+    // Mock invoke to throw an error
+    const error = new Error('test-error');
+    invoke = jest.fn().mockRejectedValue(error);
+    sequence = new MySequence(findRoute, parseParams, invoke, send, reject);
+
+    // Execute the sequence
+    await sequence.handle(context);
+
+    // Assert error handling
+    expect(reject).toHaveBeenCalledWith(context, error);
+  });
+});
