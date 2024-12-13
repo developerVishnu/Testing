@@ -1,36 +1,63 @@
-import { BankInstructionDataELC, DocumentsRequiredELC, GeneralELCDetailsDataELC, InternalDataDetailsELC, LetterOfCreditHeaderDetailsELC, LetterOfCreditNumberELC, SenderBankDetailsELC, ShipmentDetailsELC } from "src/utils/TxwdLCDetails";
-import { LCDetailMT700 } from "./LCDetailMT700";
-import { LCDetailsFS } from "./LCDetailsFrontendSample";
+import {BootMixin} from '@loopback/boot';
+import {ApplicationConfig} from '@loopback/core';
+import {
+  RestExplorerBindings,
+  RestExplorerComponent,
+} from '@loopback/rest-explorer';
+import {HealthComponent, HealthBindings} from '@loopback/extension-health';
+import {RestApplication, RestBindings} from '@loopback/rest';
+import {ServiceMixin} from '@loopback/service-proxy';
+import path from 'path';
+import {MySequence} from './sequence';
+import {RepositoryMixin} from '@loopback/repository';
+import {SECURITY_SCHEMA_SPEC, SECURITY_SPEC} from './keys';
  
-const TransactionWorkDeskLCDetailsData = () => {
-    const generalLetterOfCreditData = LCDetailMT700?.letterOfCreditDetails?.generalLetterOfCreditDetails;
+export class TxWebBackendModule extends BootMixin(
+  ServiceMixin(RepositoryMixin(RestApplication)),
+) {
+  constructor(options: ApplicationConfig = {}) {
+    super(options);
  
-    const data = {
-        ...LCDetailMT700,
-        letterOfCreditDetails: {
-            ...LCDetailMT700.letterOfCreditDetails,
-            letterOfCreditNumber: {
-                ...LCDetailMT700.letterOfCreditDetails?.letterOfCreditNumber,
-                ...LetterOfCreditNumberELC(LCDetailsFS)?.letterOfCreditNumberData,
-            },
-            senderBankDetails: {
-                ...LCDetailMT700.letterOfCreditDetails?.senderBankDetails,
-                ...SenderBankDetailsELC(LCDetailsFS, LCDetailMT700)?.senderBankDetails,
-            },
-            generalLetterOfCreditDetails: {
-                ...LCDetailMT700.letterOfCreditDetails?.generalLetterOfCreditDetails,
-                ...InternalDataDetailsELC(LCDetailsFS, generalLetterOfCreditData)?.internalDataDetails,
-                ...ShipmentDetailsELC(LCDetailsFS, generalLetterOfCreditData)?.shipmentDetailsELC,
-                ...LetterOfCreditHeaderDetailsELC(LCDetailsFS, generalLetterOfCreditData)?.letterOfCreditHeaderDetails,
-                ...DocumentsRequiredELC(LCDetailsFS, generalLetterOfCreditData)?.documentsRequired,
-                ...BankInstructionDataELC(LCDetailsFS, generalLetterOfCreditData)?.bankInstruction,
-                ...GeneralELCDetailsDataELC(LCDetailsFS, generalLetterOfCreditData)?.generalELCDetails,
-            }
-        }
-    }
+    // Set up the custom sequence
+    this.sequence(MySequence);
  
-    return data;
-    // return <div><pre>{JSON.stringify({ data }, null, 2)}</pre></div>;
+    // Set up default home page
+    this.static('/', path.join(__dirname, '../public'));
+ 
+    // Customize @loopback/rest-explorer configuration here
+    this.bind(RestExplorerBindings.CONFIG).to({
+      path: '/explorer',
+    });
+    // Customize @loopback/extension-health configuration here
+    this.configure(HealthBindings.COMPONENT).to({
+      healthPath: '/info',
+      livePath: '/live',
+      readyPath: '/ready',
+      useSelfHostedSpec: false,
+    });
+ 
+    this.component(RestExplorerComponent);
+    this.component(HealthComponent);
+ 
+    this.projectRoot = __dirname;
+    // Customize @loopback/boot Booter Conventions here
+    this.bootOptions = {
+      controllers: {
+        // Customize ControllerBooter Conventions here
+        dirs: ['controllers'],
+        extensions: ['.controller.js'],
+        nested: true,
+      },
+    };
+ 
+    const oaiSpec = this.getSync(RestBindings.API_SPEC);
+    this.api(
+      Object.assign(oaiSpec, {
+        components: {
+          ...SECURITY_SCHEMA_SPEC,
+        },
+        security: SECURITY_SPEC,
+      }),
+    );
+  }
 }
- 
-export default TransactionWorkDeskLCDetailsData; 
