@@ -1,4 +1,4 @@
-import {expect} from '@loopback/testlab';
+import {expect, sinon} from '@loopback/testlab';
 import {
   FindRoute,
   InvokeMethod,
@@ -8,63 +8,71 @@ import {
   RestBindings,
   Send,
 } from '@loopback/rest';
-import {MySequence} from '../path-to-your-sequence'; // Update with the actual path
+import {MySequence} from '../path-to-your-sequence'; // Replace with the actual path
 
 describe('MySequence', () => {
   let sequence: MySequence;
-  let findRoute: FindRoute;
-  let parseParams: ParseParams;
-  let invoke: InvokeMethod;
-  let send: Send;
-  let reject: Reject;
+  let findRouteStub: sinon.SinonStub;
+  let parseParamsStub: sinon.SinonStub;
+  let invokeStub: sinon.SinonStub;
+  let sendStub: sinon.SinonStub;
+  let rejectStub: sinon.SinonStub;
 
   beforeEach(() => {
-    findRoute = jest.fn().mockReturnValue(() => {});
-    parseParams = jest.fn().mockResolvedValue([]);
-    invoke = jest.fn().mockResolvedValue('test-result');
-    send = jest.fn();
-    reject = jest.fn();
+    // Create stubs for each dependency
+    findRouteStub = sinon.stub().returns(() => {});
+    parseParamsStub = sinon.stub().resolves([]);
+    invokeStub = sinon.stub().resolves('test-result');
+    sendStub = sinon.stub();
+    rejectStub = sinon.stub();
 
-    sequence = new MySequence(findRoute, parseParams, invoke, send, reject);
+    // Instantiate the sequence with the stubs
+    sequence = new MySequence(
+      findRouteStub,
+      parseParamsStub,
+      invokeStub,
+      sendStub,
+      rejectStub,
+    );
   });
 
   it('handles a successful request', async () => {
+    // Mock a RequestContext
     const request = {method: 'GET', url: '/test'} as any;
     const response = {} as any;
-
     const context = {
       request,
       response,
     } as RequestContext;
 
-    // Execute the sequence
+    // Call the sequence's handle method
     await sequence.handle(context);
 
-    // Assert the flow
-    expect(findRoute).toHaveBeenCalledWith(request);
-    expect(parseParams).toHaveBeenCalled();
-    expect(invoke).toHaveBeenCalled();
-    expect(send).toHaveBeenCalledWith(response, 'test-result');
+    // Verify the behavior of each stub
+    sinon.assert.calledWith(findRouteStub, request);
+    sinon.assert.calledOnce(parseParamsStub);
+    sinon.assert.calledOnce(invokeStub);
+    sinon.assert.calledWith(sendStub, response, 'test-result');
   });
 
   it('handles errors by calling reject', async () => {
+    // Mock a RequestContext
     const request = {method: 'GET', url: '/test'} as any;
     const response = {} as any;
-
     const context = {
       request,
       response,
     } as RequestContext;
 
-    // Mock invoke to throw an error
+    // Simulate an error during the invoke phase
     const error = new Error('test-error');
-    invoke = jest.fn().mockRejectedValue(error);
-    sequence = new MySequence(findRoute, parseParams, invoke, send, reject);
+    invokeStub.rejects(error);
 
-    // Execute the sequence
+    // Call the sequence's handle method
     await sequence.handle(context);
 
-    // Assert error handling
-    expect(reject).toHaveBeenCalledWith(context, error);
+    // Verify that reject was called
+    sinon.assert.calledWith(rejectStub, context, error);
+    sinon.assert.notCalled(sendStub); // Ensure send is not called in case of an error
   });
 });
