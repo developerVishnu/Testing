@@ -1,81 +1,15 @@
-import {BootMixin} from '@loopback/boot';
-import {ApplicationConfig} from '@loopback/core';
-import {
-  RestExplorerBindings,
-  RestExplorerComponent,
-} from '@loopback/rest-explorer';
-import {HealthComponent, HealthBindings} from '@loopback/extension-health';
-import {RestApplication, RestBindings} from '@loopback/rest';
-import {ServiceMixin} from '@loopback/service-proxy';
-import path from 'path';
-import {MySequence} from './sequence';
-import {RepositoryMixin} from '@loopback/repository';
-import {SECURITY_SCHEMA_SPEC, SECURITY_SPEC} from './keys';
- 
-export class TxWebBackendModule extends BootMixin(
-  ServiceMixin(RepositoryMixin(RestApplication)),
-) {
-  constructor(options: ApplicationConfig = {}) {
-    super(options);
- 
-    // Set up the custom sequence
-    this.sequence(MySequence);
- 
-    // Set up default home page
-    this.static('/', path.join(__dirname, '../public'));
- 
-    // Customize @loopback/rest-explorer configuration here
-    this.bind(RestExplorerBindings.CONFIG).to({
-      path: '/explorer',
-    });
-    // Customize @loopback/extension-health configuration here
-    this.configure(HealthBindings.COMPONENT).to({
-      healthPath: '/info',
-      livePath: '/live',
-      readyPath: '/ready',
-      useSelfHostedSpec: false,
-    });
- 
-    this.component(RestExplorerComponent);
-    this.component(HealthComponent);
- 
-    this.projectRoot = __dirname;
-    // Customize @loopback/boot Booter Conventions here
-    this.bootOptions = {
-      controllers: {
-        // Customize ControllerBooter Conventions here
-        dirs: ['controllers'],
-        extensions: ['.controller.js'],
-        nested: true,
-      },
-    };
- 
-    const oaiSpec = this.getSync(RestBindings.API_SPEC);
-    this.api(
-      Object.assign(oaiSpec, {
-        components: {
-          ...SECURITY_SCHEMA_SPEC,
-        },
-        security: SECURITY_SPEC,
-      }),
-    );
-  }
-}
-import {
-  RestApplication,
-  RestBindings,
-  RestExplorerBindings,
-  RestExplorerComponent,
-} from '@loopback/rest';
+import {expect} from '@loopback/testlab';
+import {RestBindings, RestApplication} from '@loopback/rest';
 import {HealthBindings, HealthComponent} from '@loopback/extension-health';
-import {ApplicationConfig} from '@loopback/core';
+import {RestExplorerBindings, RestExplorerComponent} from '@loopback/rest-explorer';
 import path from 'path';
-import {TxWebBackendModule} from './path-to-your-module'; // Adjust the path as needed
+import {TxWebBackendModule} from './path-to-your-module'; // Replace with actual path
+import {ApplicationConfig} from '@loopback/core';
 
-describe('TxWebBackendModule', () => {
+describe('TxWebBackendModule (Integration)', () => {
   let app: TxWebBackendModule;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     const config: ApplicationConfig = {
       rest: {
         port: 0, // Use ephemeral port for testing
@@ -83,59 +17,58 @@ describe('TxWebBackendModule', () => {
       },
     };
     app = new TxWebBackendModule(config);
+    await app.boot();
   });
 
-  it('should initialize with correct bindings and components', async () => {
-    // Verify custom sequence is set
+  afterEach(async () => {
+    await app.stop();
+  });
+
+  it('initializes RestApplication correctly', async () => {
+    expect(app).to.be.instanceOf(RestApplication);
+    expect(app.projectRoot).to.equal(__dirname);
+  });
+
+  it('configures custom sequence', async () => {
     const sequence = await app.get('sequence.actions');
-    expect(sequence).toBeDefined();
-
-    // Verify RestExplorerComponent is added
-    expect(app.isBound(RestExplorerBindings.COMPONENT)).toBe(true);
-
-    // Verify HealthComponent is added
-    expect(app.isBound(HealthBindings.COMPONENT)).toBe(true);
-
-    // Verify static path is set
-    const staticDir = app.static('/', path.join(__dirname, '../public'));
-    expect(staticDir).toBeDefined();
-
-    // Verify API spec security configurations
-    const apiSpec = await app.get(RestBindings.API_SPEC);
-    expect(apiSpec.components).toBeDefined();
-    expect(apiSpec.security).toBeDefined();
+    expect(sequence).to.not.be.undefined();
   });
 
-  it('should set custom RestExplorer configuration', async () => {
+  it('sets static directory correctly', async () => {
+    const staticPath = path.join(__dirname, '../public');
+    expect(app.static('/', staticPath)).to.not.be.undefined();
+  });
+
+  it('includes RestExplorerComponent with custom configuration', async () => {
     const explorerConfig = await app.get(RestExplorerBindings.CONFIG);
-    expect(explorerConfig.path).toEqual('/explorer');
+    expect(explorerConfig).to.deepEqual({
+      path: '/explorer',
+    });
+    expect(app.isBound(RestExplorerBindings.COMPONENT)).to.be.true();
   });
 
-  it('should set health endpoints configuration', async () => {
-    const healthConfig = await app.getBinding(HealthBindings.COMPONENT).getConfig();
-    expect(healthConfig).toMatchObject({
+  it('includes HealthComponent with configured health endpoints', async () => {
+    const healthConfig = await app.getConfig(HealthBindings.COMPONENT);
+    expect(healthConfig).to.deepEqual({
       healthPath: '/info',
       livePath: '/live',
       readyPath: '/ready',
       useSelfHostedSpec: false,
     });
+    expect(app.isBound(HealthBindings.COMPONENT)).to.be.true();
   });
 
-  it('should use the correct boot options', () => {
-    expect(app.bootOptions).toEqual(
-      expect.objectContaining({
-        controllers: {
-          dirs: ['controllers'],
-          extensions: ['.controller.js'],
-          nested: true,
-        },
-      }),
-    );
+  it('applies custom API spec security configuration', async () => {
+    const apiSpec = await app.get(RestBindings.API_SPEC);
+    expect(apiSpec.components).to.have.key('securitySchemes');
+    expect(apiSpec.security).to.not.be.undefined();
   });
 
-  it('should initialize the RestApplication properly', () => {
-    expect(app).toBeInstanceOf(RestApplication);
-    expect(app.projectRoot).toEqual(__dirname);
+  it('sets custom boot options for controllers', async () => {
+    expect(app.bootOptions.controllers).to.deepEqual({
+      dirs: ['controllers'],
+      extensions: ['.controller.js'],
+      nested: true,
+    });
   });
 });
-
