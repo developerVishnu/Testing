@@ -57,3 +57,87 @@ export class AuthorizationInterceptor implements Provider<Interceptor> {
     }
   }
 }
+
+
+import {expect, sinon} from '@loopback/testlab';
+import {AuthorizationInterceptor} from '../path-to-your-interceptor'; // Update with actual path
+import {RestBindings} from '@loopback/rest';
+import {InvocationContext} from '@loopback/context';
+import {ProjectConfig} from '@tradexpress/core-web-utils';
+import {AuthUtil} from '@tradexpress/web-backend-utils';
+
+describe('AuthorizationInterceptor', () => {
+  let interceptor: AuthorizationInterceptor;
+  let invocationCtxStub: sinon.SinonStubbedInstance<InvocationContext>;
+
+  beforeEach(() => {
+    interceptor = new AuthorizationInterceptor();
+    invocationCtxStub = sinon.createStubInstance(InvocationContext);
+  });
+
+  it('allows the request if authentication restrictions are disabled', async () => {
+    ProjectConfig.configs = {disableAuthenticationRestrictions: true};
+
+    const nextStub = sinon.stub().resolves('next-result');
+
+    const result = await interceptor.intercept(invocationCtxStub, nextStub);
+
+    expect(nextStub.calledOnce).to.be.true();
+    expect(result).to.equal('next-result');
+  });
+
+  it('throws an error if authorization token is missing', async () => {
+    ProjectConfig.configs = {disableAuthenticationRestrictions: false};
+
+    invocationCtxStub.get.withArgs(RestBindings.Http.REQUEST).resolves({
+      headers: {},
+    });
+
+    const nextStub = sinon.stub();
+
+    await expect(interceptor.intercept(invocationCtxStub, nextStub)).to.be.rejectedWith({
+      message: 'Authorization token is missing',
+      code: 'AUTH_TOKEN_NOT_FOUND',
+      statusCode: 401,
+    });
+  });
+
+  it('throws an error if the token is invalid', async () => {
+    ProjectConfig.configs = {disableAuthenticationRestrictions: false};
+
+    invocationCtxStub.get.withArgs(RestBindings.Http.REQUEST).resolves({
+      headers: {authorization: 'Bearer invalid-token'},
+    });
+
+    sinon.stub(AuthUtil, 'isValidToken').resolves(false);
+
+    const nextStub = sinon.stub();
+
+    await expect(interceptor.intercept(invocationCtxStub, nextStub)).to.be.rejectedWith({
+      message: 'Invalid authorization token',
+      code: 'AUTH_TOKEN_INVALID',
+      statusCode: 401,
+    });
+
+    sinon.restore(); // Restore original AuthUtil behavior
+  });
+
+  it('proceeds to the next middleware if the token is valid', async () => {
+    ProjectConfig.configs = {disableAuthenticationRestrictions: false};
+
+    invocationCtxStub.get.withArgs(RestBindings.Http.REQUEST).resolves({
+      headers: {authorization: 'Bearer valid-token'},
+    });
+
+    sinon.stub(AuthUtil, 'isValidToken').resolves(true);
+
+    const nextStub = sinon.stub().resolves('next-result');
+
+    const result = await interceptor.intercept(invocationCtxStub, nextStub);
+
+    expect(nextStub.calledOnce).to.be.true();
+    expect(result).to.equal('next-result');
+
+    sinon.restore(); // Restore original AuthUtil behavior
+  });
+});
