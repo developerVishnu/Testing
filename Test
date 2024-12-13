@@ -61,3 +61,81 @@ export class TxWebBackendModule extends BootMixin(
     );
   }
 }
+import {
+  RestApplication,
+  RestBindings,
+  RestExplorerBindings,
+  RestExplorerComponent,
+} from '@loopback/rest';
+import {HealthBindings, HealthComponent} from '@loopback/extension-health';
+import {ApplicationConfig} from '@loopback/core';
+import path from 'path';
+import {TxWebBackendModule} from './path-to-your-module'; // Adjust the path as needed
+
+describe('TxWebBackendModule', () => {
+  let app: TxWebBackendModule;
+
+  beforeEach(() => {
+    const config: ApplicationConfig = {
+      rest: {
+        port: 0, // Use ephemeral port for testing
+        host: '127.0.0.1',
+      },
+    };
+    app = new TxWebBackendModule(config);
+  });
+
+  it('should initialize with correct bindings and components', async () => {
+    // Verify custom sequence is set
+    const sequence = await app.get('sequence.actions');
+    expect(sequence).toBeDefined();
+
+    // Verify RestExplorerComponent is added
+    expect(app.isBound(RestExplorerBindings.COMPONENT)).toBe(true);
+
+    // Verify HealthComponent is added
+    expect(app.isBound(HealthBindings.COMPONENT)).toBe(true);
+
+    // Verify static path is set
+    const staticDir = app.static('/', path.join(__dirname, '../public'));
+    expect(staticDir).toBeDefined();
+
+    // Verify API spec security configurations
+    const apiSpec = await app.get(RestBindings.API_SPEC);
+    expect(apiSpec.components).toBeDefined();
+    expect(apiSpec.security).toBeDefined();
+  });
+
+  it('should set custom RestExplorer configuration', async () => {
+    const explorerConfig = await app.get(RestExplorerBindings.CONFIG);
+    expect(explorerConfig.path).toEqual('/explorer');
+  });
+
+  it('should set health endpoints configuration', async () => {
+    const healthConfig = await app.getBinding(HealthBindings.COMPONENT).getConfig();
+    expect(healthConfig).toMatchObject({
+      healthPath: '/info',
+      livePath: '/live',
+      readyPath: '/ready',
+      useSelfHostedSpec: false,
+    });
+  });
+
+  it('should use the correct boot options', () => {
+    expect(app.bootOptions).toEqual(
+      expect.objectContaining({
+        controllers: {
+          dirs: ['controllers'],
+          extensions: ['.controller.js'],
+          nested: true,
+        },
+      }),
+    );
+  });
+
+  it('should initialize the RestApplication properly', () => {
+    expect(app).toBeInstanceOf(RestApplication);
+    expect(app.projectRoot).toEqual(__dirname);
+  });
+});
+
