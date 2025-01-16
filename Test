@@ -29,3 +29,87 @@ export declare class TXAjv {
     static getNewInstance(props?: Options): Ajv;
     private static createInstance;
 }
+
+{
+    title: 'Tenor Type',
+    column: 'tenorType',
+    actionConfig: {
+      type: CODE_DECODE_DROPDOWN,
+      codeId: 'TENOR_TYPE_MIXEDGRID',
+      placeholder: 'Select Tenor Type',
+      schema: {
+        type: 'string',
+        minLength: 1,
+      },
+    },
+    handleCustomOnChange : (newValue, rowKeyValue, columnKey) => {
+      console.log("newValue, rowKeyValue, columnKey", newValue, rowKeyValue, columnKey)
+    }
+  },
+  {
+    title: 'Tenor in Days',
+    column: 'tenorInDays',
+    type: 'text',
+    actionConfig: {
+      type: 'text',
+      placeholder: 'Enter Tenor In Days',
+      schema: {
+        type: 'string',
+        maxLength: 3,
+        minLength: 1,
+        pattern: '^[0-9]+$',
+      },
+      disabled: (data) => {
+        // console.log('DATA', data?.tenorInDays?.value);
+
+        // console.log('custColRen', data);
+        // let tenorInDays = data?.tenorInDays?.value;
+        // let tenorType = data?.tenorType?.value;
+        // if (tenorType === 'SGHT' || tenorType === 'APYT') {
+        //     console.log('tenorInDaysValue-0',tenorInDays)
+        //     tenorInDays = '';
+        //     console.log('tenorInDaysValue-1',data?.tenorInDays?.value)
+        //     return true;
+        // } else if(tenorType === 'USAN') {
+        //     console.log('tenorInDaysValue-2',tenorInDays)
+        //     return false;
+        // }
+
+      // if (data && data?.tenorType) {
+      //   let tenorInDays = data?.tenorInDays?.value;
+      //   let tenorType = data?.tenorType?.value;
+      //   if (tenorType === 'SGHT' || tenorType === 'APYT') {
+      //       tenorInDays = ''
+      //       console.log('tenorInDaysValue-1',tenorInDays,)
+      //       return true;
+      //   } else if(tenorType === 'USAN') {
+      //       console.log('tenorInDaysValue-2',tenorInDays,)
+      //       return false;
+      //   }
+      //   console.log('tenorType',tenorType);
+      //   return tenorInDays;
+      // }
+
+        // if(data?.tenorType?.value === 'SGHT' || data?.tenorType?.value === 'APYT') {
+        //   let tenorData:any = data?.tenorInDays?.value;
+        //   tenorData = '-';
+        //   console.log('tenorData', tenorData);
+
+        // }
+
+        return data?.tenorType?.value === 'SGHT' || data?.tenorType?.value === 'APYT' ? true : false;
+      }
+    },
+    // columnCustomRenderer: (text, data) => {
+    //   console.log('custColRen', data);
+    //   if (data && data?.tenorType) {
+    //     let tenorInDays;
+    //     let tenorType = data?.tenorType?.value;
+    //     if (tenorType !== 'SGHT') {
+    //       tenorInDays = '5'
+    //     }
+    //     console.log('tenorValue',tenorInDays);
+    //     return tenorInDays;
+    //   }
+    // },
+  },
