@@ -16,3 +16,153 @@ Bank Instructions  Tab- Special Payment Condition For Beneficiary and Bank
 
 Output:
 1.) Validation error and warning messages are shown as per consensus
+To implement the mentioned validations and functionality in React, follow these steps:
+
+1. Create the State Structure
+
+Define a state for each of the five fields and include a structure to track errors, warnings, and the “Replace All” checkbox state.
+
+import React, { useState } from "react";
+
+const ValidationForm = () => {
+  const [fields, setFields] = useState({
+    goodsDescription: "",
+    documentRequired: "",
+    additionalConditions: "",
+    specialPaymentCondition: "",
+    other: "",
+  });
+
+  const [errors, setErrors] = useState({});
+  const [warnings, setWarnings] = useState({});
+  const [replaceAllCheckbox, setReplaceAllCheckbox] = useState(false);
+
+  // Handle field changes
+  const handleFieldChange = (field, value) => {
+    setFields((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+    setErrors((prev) => ({ ...prev, [field]: null })); // Clear errors on edit
+    setWarnings((prev) => ({ ...prev, [field]: null })); // Clear warnings on edit
+  };
+
+2. Define Validation Rules
+
+Create a function to validate each field based on the consensus rules.
+
+const validateField = (text) => {
+  const lines = text.split("\n");
+  const errors = [];
+  const warnings = [];
+
+  // Validation 1.1
+  if (!lines[0].startsWith("/REPALL/") && !lines[0].startsWith("/ADD/") && !lines[0].startsWith("/DELETE/")) {
+    errors.push("Line 1 should start with valid keyword /REPALL/, /ADD/ or /DELETE/");
+  }
+
+  // Validation 1.2 and 1.3
+  const firstKeyword = lines[0].split(" ")[0];
+  lines.slice(1).forEach((line, index) => {
+    const keyword = line.split(" ")[0];
+    if (firstKeyword === "/REPALL/" && (keyword === "/ADD/" || keyword === "/DELETE/")) {
+      errors.push(`/ADD/ and /DELETE/ keywords are not valid under /REPALL/ (Line ${index + 2})`);
+    } else if ((firstKeyword === "/ADD/" || firstKeyword === "/DELETE/") && keyword === "/REPALL/") {
+      errors.push(`/REPALL/ keyword is not valid under /ADD/ or /DELETE/ (Line ${index + 2})`);
+    }
+  });
+
+  // Validation 1.4
+  lines.forEach((line, index) => {
+    const keyword = line.match(/\/(REPALL|ADD|DELETE)\//g);
+    if (keyword && !line.startsWith(keyword[0])) {
+      warnings.push(`Keyword ${keyword[0]} found in text at Line ${index + 1}. Please validate.`);
+    }
+  });
+
+  return { errors, warnings };
+};
+
+3. Apply Validations on Save/Submit
+
+Validate all fields when the user clicks Save or Submit and update the state accordingly.
+
+const handleSaveOrSubmit = () => {
+  const newErrors = {};
+  const newWarnings = {};
+
+  Object.keys(fields).forEach((field) => {
+    const { errors, warnings } = validateField(fields[field]);
+    if (errors.length) newErrors[field] = errors;
+    if (warnings.length) newWarnings[field] = warnings;
+  });
+
+  setErrors(newErrors);
+  setWarnings(newWarnings);
+
+  // Prevent save/submit if errors exist
+  if (Object.keys(newErrors).length > 0) {
+    alert("Errors found! Please fix them before proceeding.");
+    return;
+  }
+
+  // Handle warnings (proceed if user confirms)
+  if (Object.keys(newWarnings).length > 0) {
+    if (!window.confirm("Warnings found! Do you want to proceed?")) return;
+  }
+
+  // Proceed with save/submit
+  alert("Form submitted successfully!");
+};
+
+4. Auto-Update “Replace All” Checkbox
+
+Update the checkbox state when /REPALL/ is found in Line 1, Position 1.
+
+const handleAutoUpdateReplaceAll = (field, text) => {
+  if (text.startsWith("/REPALL/")) {
+    setReplaceAllCheckbox(true);
+  } else {
+    setReplaceAllCheckbox(false);
+  }
+  handleFieldChange(field, text);
+};
+
+5. Render the Form
+
+Create input fields for the five text areas and display errors and warnings dynamically.
+
+return (
+  <div>
+    {Object.keys(fields).map((field) => (
+      <div key={field}>
+        <label>{field.replace(/([A-Z])/g, " $1")}</label>
+        <textarea
+          value={fields[field]}
+          onChange={(e) => handleAutoUpdateReplaceAll(field, e.target.value)}
+        />
+        {errors[field] && <div style={{ color: "red" }}>{errors[field].join(", ")}</div>}
+        {warnings[field] && <div style={{ color: "orange" }}>{warnings[field].join(", ")}</div>}
+      </div>
+    ))}
+
+    <div>
+      <label>
+        Replace All:
+        <input type="checkbox" checked={replaceAllCheckbox} disabled />
+      </label>
+    </div>
+
+    <button onClick={handleSaveOrSubmit}>Save</button>
+    <button onClick={handleSaveOrSubmit}>Submit</button>
+  </div>
+);
+};
+
+6. Final Component
+
+Bring it all together.
+
+export default ValidationForm;
+
+This approach provides clear error and warning messages, dynamically handles validations, and ensures a smooth user experience.
