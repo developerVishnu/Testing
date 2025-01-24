@@ -1,115 +1,18 @@
-export const useTXAjvValidation = (value, schema) => {
-  const txAjvObj: any = TXAjv.getSingletonInstance();
-  const validate = txAjvObj.compile(updateSchemaObjectProperties(schema) || {});
-  /** Do validation */
-  validate(value);
+Consensus:
+1.) Perform below validations on the requested text for the 5 long text fields or on the maker input field if available. The 5 fields are
+Shipment Details Tab - Goods Description  
+Document Required Tab - Document Required
+Other Terms and Condition Tab - Additional Conditions 
+Bank Instructions  Tab- Special Payment Condition For Beneficiary and Bank
 
-  return validate.errors;
-};
+1.1) Line 1, start position should start with a keyword /REPALL/ or /ADD/ or /DELETE/ If Line 1, position 1 has any other text that the keywords, Throw error message "Line 1 should start with valid keyword /REPALL/, /ADD/ or /DELETE/"
+1.2) If Line 1, Position 1 has keyword /REPALL/ and any subsequent line, Position 1 has keywords /ADD/ or /DELETE/ then throw error message "/ADD/ and /DELETE/ keywords are not valid under /REPALL/
+1.3) If Line 1, Position 1 has keywords /ADD/ or /DELETE/ and any subsequent line, Position 1 has keyword /REPALL/ then throw error message "/REPALL/ keyword is not valid under /ADD/ or /DELETE/
+1.4) If the keywords /ADD/, /DELETE/, /REPALL/ are found in any row at any position other than position 1, then throw warning message. "Keyword {XXX} found in text. Please validate"
 
-export const updateSchemaObjectProperties = (obj) => {
-  // Check if 'properties' exists and has a 'value' property
-  if (obj.hasOwnProperty('properties') && obj.properties.hasOwnProperty('value')) {
-    // Create a new object with the contents of 'value' at the top level
-    const updatedProperties = { ...obj.properties.value };
+2.) Add the above validation on Submit and Save buttons to prevent user from saving/submitting incorrect data. Save/Submit can proceed in case user clicks OK for the warning on 1.4 For all the errors, Save and Submit should not proceed.
 
-    // Return a new object with the updated structure
-    return updatedProperties;
-  }
+3.) When the requested text contains the keyword /REPALL/ at Line1, Position 1, then autoupdate the "Replace All" checkbox (above left hand side text) and keep in disabled mode.
 
-  // If 'value' doesn't exist, return a shallow copy of the object as is
-  return { ...obj };
-}
-
-import Ajv, { Options } from 'ajv';
-export declare class TXAjv {
-    private static instance;
-    private constructor();
-    static getSingletonInstance(): Ajv;
-    static getNewInstance(props?: Options): Ajv;
-    private static createInstance;
-}
-
-{
-    title: 'Tenor Type',
-    column: 'tenorType',
-    actionConfig: {
-      type: CODE_DECODE_DROPDOWN,
-      codeId: 'TENOR_TYPE_MIXEDGRID',
-      placeholder: 'Select Tenor Type',
-      schema: {
-        type: 'string',
-        minLength: 1,
-      },
-    },
-    handleCustomOnChange : (newValue, rowKeyValue, columnKey) => {
-      console.log("newValue, rowKeyValue, columnKey", newValue, rowKeyValue, columnKey)
-    }
-  },
-  {
-    title: 'Tenor in Days',
-    column: 'tenorInDays',
-    type: 'text',
-    actionConfig: {
-      type: 'text',
-      placeholder: 'Enter Tenor In Days',
-      schema: {
-        type: 'string',
-        maxLength: 3,
-        minLength: 1,
-        pattern: '^[0-9]+$',
-      },
-      disabled: (data) => {
-        // console.log('DATA', data?.tenorInDays?.value);
-
-        // console.log('custColRen', data);
-        // let tenorInDays = data?.tenorInDays?.value;
-        // let tenorType = data?.tenorType?.value;
-        // if (tenorType === 'SGHT' || tenorType === 'APYT') {
-        //     console.log('tenorInDaysValue-0',tenorInDays)
-        //     tenorInDays = '';
-        //     console.log('tenorInDaysValue-1',data?.tenorInDays?.value)
-        //     return true;
-        // } else if(tenorType === 'USAN') {
-        //     console.log('tenorInDaysValue-2',tenorInDays)
-        //     return false;
-        // }
-
-      // if (data && data?.tenorType) {
-      //   let tenorInDays = data?.tenorInDays?.value;
-      //   let tenorType = data?.tenorType?.value;
-      //   if (tenorType === 'SGHT' || tenorType === 'APYT') {
-      //       tenorInDays = ''
-      //       console.log('tenorInDaysValue-1',tenorInDays,)
-      //       return true;
-      //   } else if(tenorType === 'USAN') {
-      //       console.log('tenorInDaysValue-2',tenorInDays,)
-      //       return false;
-      //   }
-      //   console.log('tenorType',tenorType);
-      //   return tenorInDays;
-      // }
-
-        // if(data?.tenorType?.value === 'SGHT' || data?.tenorType?.value === 'APYT') {
-        //   let tenorData:any = data?.tenorInDays?.value;
-        //   tenorData = '-';
-        //   console.log('tenorData', tenorData);
-
-        // }
-
-        return data?.tenorType?.value === 'SGHT' || data?.tenorType?.value === 'APYT' ? true : false;
-      }
-    },
-    // columnCustomRenderer: (text, data) => {
-    //   console.log('custColRen', data);
-    //   if (data && data?.tenorType) {
-    //     let tenorInDays;
-    //     let tenorType = data?.tenorType?.value;
-    //     if (tenorType !== 'SGHT') {
-    //       tenorInDays = '5'
-    //     }
-    //     console.log('tenorValue',tenorInDays);
-    //     return tenorInDays;
-    //   }
-    // },
-  },
+Output:
+1.) Validation error and warning messages are shown as per consensus
