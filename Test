@@ -1,4 +1,208 @@
-export const compareObjects =(obj1, obj2, path = "",defaultLOCData,dataGrid,lcDetailsData) => {
+import _ from 'lodash';
+
+interface LabelData {
+  [key: string]: any;
+}
+
+interface DefaultLOCData {
+  label: LabelData;
+}
+
+/**
+ * Compares two objects recursively and returns an array of differences.
+ *
+ * @param obj1 - The first (requested) object.
+ * @param obj2 - The second (bank) object.
+ * @param path - The current path in the object hierarchy.
+ * @param defaultLOCData - An object containing field labels.
+ * @param dataGrid - Data grid used for obtaining currency values for obj1.
+ * @param lcDetailsData - LC details data used for obtaining currency values for obj2.
+ * @returns An array of difference objects.
+ */
+export const compareObjects = (
+  obj1: any,
+  obj2: any,
+  path = "",
+  defaultLOCData: DefaultLOCData,
+  dataGrid: any,
+  lcDetailsData: any
+): any[] => {
+  const differences: any[] = [];
+  let convertingObj1Value = "";
+  let convertingObj2Value = "";
+
+  for (const key in obj2) {
+    if (!obj2.hasOwnProperty(key)) continue;
+
+    // Skip processing if the current path is an exception.
+    const lowerPath = path.toLowerCase();
+    const isException =
+      lowerPath.includes("unformattedvalue") ||
+      lowerPath.includes("filimitbookingdetails") ||
+      lowerPath.includes("cancellationrequest");
+    if (isException) {
+      continue;
+    }
+
+    const currentPath = path ? `${path}.${key}` : key;
+
+    // If the current property is an object, compare recursively.
+    if (_.isObject(obj2[key]) && obj1[key]) {
+      differences.push(
+        ...compareObjects(obj1[key], obj2[key], currentPath, defaultLOCData, dataGrid, lcDetailsData)
+      );
+    }
+    // Otherwise, compare the values.
+    else if (!_.isEqual(obj1[key], obj2[key])) {
+      // Check for a "decreaseInAmount" property.
+      const isDecreaseInAmount = currentPath.includes("decreaseInAmount");
+      const inAmountChanged =
+        !!obj1[key] || !!obj2[key]?.currency?.value || !!obj2[key]?.formattedValue?.value;
+      // If we are in a "decreaseInAmount" case and there is an inAmount change, then we do NOT want to flag it.
+      const decreaseInAmountFlag = isDecreaseInAmount ? (!inAmountChanged ? true : false) : false;
+
+      // Only proceed if there is no decreaseInAmount flag and the new value exists.
+      if (!decreaseInAmountFlag && obj2[key]) {
+        // Skip if the current path includes 'unformattedvalue'
+        if (currentPath.toLowerCase().includes("unformattedvalue")) {
+          continue;
+        }
+
+        // Convert obj1 value to a formatted string.
+        if (typeof obj1[key]?.value === "boolean" || typeof obj1[key] === "boolean") {
+          convertingObj1Value = (obj1[key]?.value || obj1[key]) ? "Yes" : "No";
+        } else if (typeof obj1[key] === "string") {
+          convertingObj1Value = obj1[key]
+            .split(" ")
+            .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(" ");
+        } else {
+          convertingObj1Value = obj1[key]?.value ?? obj1[key] ?? "";
+        }
+
+        // Convert obj2 value similarly.
+        if (typeof obj2[key]?.value === "boolean" || typeof obj2[key] === "boolean") {
+          convertingObj2Value = (obj2[key]?.value || obj2[key]) ? "Yes" : "No";
+        } else if (typeof obj2[key] === "string") {
+          convertingObj2Value = obj2[key]
+            .split(" ")
+            .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(" ");
+        } else {
+          convertingObj2Value = obj2[key]?.value ?? obj2[key] ?? "";
+        }
+
+        // Get currency values from dataGrid and lcDetailsData.
+        const pathParts = currentPath.split(".");
+        const firstKey = pathParts[0];
+        const secondKey = pathParts[1];
+        const Obj1CurrencyValue = dataGrid?.[firstKey]?.[secondKey]?.currency?.value;
+        const Obj2CurrencyValue = lcDetailsData?.[firstKey]?.[secondKey]?.currency?.value;
+
+        // Construct the changesByBank value.
+        let changesByBank =
+          convertingObj2Value ||
+          (Obj2CurrencyValue ? `${Obj2CurrencyValue} ${obj2[key]?.value ?? obj2[key]}` : obj2[key]);
+        // Use the second part of the path as the keyName (or fallback to key).
+        const keyName = secondKey || key;
+        changesByBank = CodeDecode(keyName, changesByBank);
+
+        // Construct the requestedChange value.
+        let requestedChange =
+          convertingObj1Value ||
+          (Obj1CurrencyValue ? `${Obj1CurrencyValue} ${obj1[key]?.value ?? obj1[key] ?? ""}` : obj1[key]);
+
+        // Determine the field name from defaultLOCData.
+        const alternateCurrentPath = pathParts.slice(0, -1).join(".");
+        const fieldName =
+          defaultLOCData?.label?.[currentPath] ||
+          defaultLOCData?.label?.[alternateCurrentPath] ||
+          defaultLOCData?.label?.[`${currentPath}.value`] ||
+          currentPath;
+
+        differences.push({
+          fieldName,
+          requestedChange,
+          changesByBank,
+          keyName,
+        });
+      }
+    }
+  }
+  return differences;
+};
+
+const codeDecodeList: { [key: string]: string } = {
+  letterOfCreditType: "LETTEROFCREDIT_TYPE",
+  amendmentType: "AMENDMENT_TYPE",
+  amendmentChargePayableByCode: "AMENDMENT_CHARGE_PAYABLE_BY",
+  purposeOfMessage: "PURPOSE_OF_MESSAGE",
+  deliveryMode: "LETTEROFCREDIT_SENTBY",
+  signatureVerified: "SIGNATURE_VERIFIED",
+  underwriting: "UNDERWRITING_BY",
+  formOfDocumentaryCredit: "FORMS_OF_LETTEROFCREDIT",
+  applicableRules: "APPLICABLE_RULES",
+  letterOfCreditExpiryPlace: "LETTEROFCREDITEXPIRY_PLACE",
+  letterOfCreditExpiryCountry: "COUNTRIES",
+  availableBy: "AVAILABLE_BY",
+  availableWith: "AVAILABLE_WITH",
+  draftDrawnOnDrawee: "DRAFT_DRAWN_ON",
+  usancePeriod: "USANCE_PERIOD",
+  confirmationInstructions: "CONFIRMATION_INSTRUCTIONS",
+  reimbursementInstruction: "REIMBURSEMENT_INSTRUCTIONS",
+  partialShipment: "PARTIAL_SHIPMENT",
+  transhipment: "TRANSHIPMENT",
+  presentationFrom: "PRESENTATION_FROM",
+  incotermYear: "INCOTERM_YEAR",
+  incoterm: "INCOTERM",
+  modeOfShipment: "MODES_OF_SHIPMENT",
+  insurancePaidBy: "INSURANCE_PAID_BY",
+  insuranceCover: "INSURANCE_COVER",
+  clientSpecifiedCharges: "CHARGES",
+  advisingCharges: "CHARGED_PARTY_EXCLUSION",
+  confirmationCharges: "CHARGED_PARTY_EXCLUSION",
+  reimbursementAndRemittanceCharges: "CHARGED_PARTY_EXCLUSION",
+  discrepancyCharges: "CHARGED_PARTY_EXCLUSION",
+  reimbursingBankCharges: "REIMBURSING_BANK_CHARGES",
+  discountingInterest: "DISCOUNTING_INTEREST",
+};
+
+/**
+ * Decodes a value based on a mapping stored in session storage.
+ *
+ * @param molecule - The key used for the codeDecode lookup.
+ * @param val - The value to decode.
+ * @returns The decoded string if found, otherwise the original value.
+ */
+export const CodeDecode = (molecule: string, val: any): any => {
+  if (!(molecule in codeDecodeList)) {
+    return val;
+  }
+
+  const key = codeDecodeList[molecule] + "_en";
+  const modKey = "SC_*_" + key;
+  let sessionData = sessionStorage.getItem(key) || sessionStorage.getItem(modKey);
+
+  if (sessionData) {
+    try {
+      const sessionObj = JSON.parse(sessionData);
+      const codeValues = sessionObj[codeDecodeList[molecule]]?.codeValues;
+      if (Array.isArray(codeValues)) {
+        const filtered = codeValues.filter((element: any) =>
+          (typeof val === "string" && element?.codeValue?.value === val) ||
+          (typeof val === "object" && element?.codeValue?.value === val?.value)
+        );
+        if (filtered.length > 0) {
+          return `${filtered[0].codeValue.value}-${filtered[0].codeValueLocalDescription.value}`;
+        }
+      }
+    } catch (error) {
+      console.error("Error parsing session storage data:", error);
+      return val;
+    }
+  }
+  return val;
+};export const compareObjects =(obj1, obj2, path = "",defaultLOCData,dataGrid,lcDetailsData) => {
   const differences:any = [];
   let convertingObj1Value = '';
   let convertingObj2Value = '';
