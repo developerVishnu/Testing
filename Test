@@ -186,3 +186,29 @@ export const CodeDecode = (molecule: string, val: any): any => {
   }
   return val;
 };
+
+  const compareObjectsFromSecond = useCallback((obj1, obj2, path = "",defaultLOCData,dataGrid,lcDetailsData)=>{
+    return compareObjects(obj1, obj2,path = "",defaultLOCData,dataGrid,lcDetailsData);
+  },[defaultLOCData?.label]);
+
+  useEffect(() => {
+    // Compare the objects and get only the changes from the second object (updated data)
+    if (dataGrid?.data &&  Object.keys(dataGrid?.data).length > 0 && lcDetailsData) {
+      let differencesFromSecond = compareObjectsFromSecond(dataGrid?.data, lcDetailsData, undefined, defaultLOCData,dataGrid?.data,lcDetailsData);
+      if (apiAmdSummary?.length > 0 && differencesFromSecond.length <= 0) {
+        differencesFromSecond = apiAmdSummary.map((element) => ({
+          ...element,
+          ...(!!element.requestedChange ? {requestedChange: CodeDecode(element.keyName,element.requestedChange)}:{})
+        }))
+      }
+      if (apiAmdSummary?.length > 0) {
+        apiAmdSummary?.forEach(element => {
+          const existObj = differencesFromSecond?.find(obj => obj.fieldName === element.fieldName);
+          if (!existObj) {
+            differencesFromSecond.push({...element, requestedChange: CodeDecode(element.keyName, element.requestedChange)});
+          }
+        });
+      }
+      setState({ data: { state: differencesFromSecond, flag: false } }, 'amendmentSummary');
+    }
+  }, [dataGrid, lcDetailsData,apiAmdSummary])
