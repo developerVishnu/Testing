@@ -1,70 +1,227 @@
+// ===================================================
+// NOTE: Any further changes should be applied at the top of this file.
+// ===================================================
 
-  import TransactionWorkDeskLCDetailsData from './TransactionWorkDeskLCDetailsData';
-import { LCDetailMT700 } from './LCDetailMT700';
-import { LCDetailsFS } from './LCDetailsFrontendSample';
-import {
-  LetterOfCreditNumberELC,
-  SenderBankDetailsELC,
-} from 'src/utils/TxwdLCDetails';
+// Helper: Converts a value (or value wrapper) to a string with proper formatting.
+const convertValue = (input: any): string => {
+  // If input is an object with a primitive "value", use that instead.
+  const value = input?.value !== undefined ? input.value : input;
 
-jest.mock('./LCDetailMT700', () => ({
-  LCDetailMT700: {
-    letterOfCreditDetails: {
-      generalLetterOfCreditDetails: { test: 'generalData' },
-      letterOfCreditNumber: { test: 'creditNumber' },
-      senderBankDetails: { test: 'senderBank' },
-    },
-  },
-}));
+  if (typeof value === 'boolean') {
+    return value ? 'Yes' : 'No';
+  } else if (typeof value === 'string') {
+    // Capitalize first letter of each word.
+    return value
+      .split(' ')
+      .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  } else if (typeof value === 'number') {
+    // Handle number including 0 (0 is a valid value)
+    return `${value}`;
+  }
+  return '';
+};
 
-jest.mock('./LCDetailsFrontendSample', () => ({
-  LCDetailsFS: { test: 'frontendSample' },
-}));
+// Returns null if the provided value is null, undefined, or an empty object.
+export const isEmptyReturnNull = (value: any) => {
+  return value === null ||
+    value === undefined ||
+    (typeof value === 'object' && Object.keys(value).length === 0)
+    ? null
+    : value;
+};
 
-jest.mock('src/utils/TxwdLCDetails', () => ({
-  LetterOfCreditNumberELC: jest.fn(() => ({ letterOfCreditNumberData: { mockKey: 'mockValue' } })),
-  SenderBankDetailsELC: jest.fn(() => ({ senderBankDetails: { mockKey: 'mockValue' } })),
-}));
+// Compares two objects recursively and returns an array of differences.
+export const compareObjects = (
+  obj1: any,
+  obj2: any,
+  path = "",
+  defaultLOCData: any,
+  dataGrid: any,
+  lcDetailsData: any
+): any[] => {
+  const differences: any[] = [];
 
-describe('TransactionWorkDeskLCDetailsData', () => {
-  it('should merge and return the correct data', () => {
-    const result = TransactionWorkDeskLCDetailsData();
+  for (const key in obj2) {
+    // Skip keys based on exception conditions.
+    const lowerPath = path.toLowerCase();
+    const exceptionFlag =
+      lowerPath.includes('unformattedvalue') ||
+      lowerPath.includes('filimitbookingdetails') ||
+      key === 'isChanged' ||
+      key === 'previous' ||
+      lowerPath.includes('cancellationrequest')
+        ? false
+        : true;
 
-    expect(result.letterOfCreditDetails.letterOfCreditNumber.mockKey).toBe('mockValue');
-    expect(result.letterOfCreditDetails.senderBankDetails.mockKey).toBe('mockValue');
-    expect(LetterOfCreditNumberELC).toHaveBeenCalledWith(LCDetailsFS);
-    expect(SenderBankDetailsELC).toHaveBeenCalledWith(LCDetailsFS, LCDetailMT700.letterOfCreditDetails.generalLetterOfCreditDetails);
-  });
-});  import React from 'react';
-import { render } from '@testing-library/react';
-import { txnWorkdeskContext } from '@store';
-import ContextProvider from './ContextProvider'; // Replace with the correct path
+    if (!obj2.hasOwnProperty(key) || !exceptionFlag) {
+      continue;
+    }
 
-describe('ContextProvider', () => {
-  it('should render children and provide context value', () => {
-    // Mock values for the context
-    const mockStoreContext = { state: { key: 'value' }, dispatch: jest.fn() };
+    const currentPath = path ? `${path}.${key}` : key;
 
-    jest.spyOn(React, 'useContext').mockReturnValue(mockStoreContext);
+    // If both values are objects, do a recursive compare.
+    if (_.isObject(obj2[key]) && obj1[key]) {
+      differences.push(
+        ...compareObjects(obj1[key], obj2[key], currentPath, defaultLOCData, dataGrid, lcDetailsData)
+      );
+    } else if (!_.isEqual(isEmptyReturnNull(obj1[key]), isEmptyReturnNull(obj2[key]))) {
+      // Convert values for comparison and display.
+      const convertingObj1Value = convertValue(obj1[key]);
+      const convertingObj2Value = convertValue(obj2[key]);
 
-    // Mock child component to consume context
-    const ChildComponent = () => {
-      const context = React.useContext(txnWorkdeskContext);
-      return <div>{context.state.key}</div>;
-    };
+      // Skip changes where the field name includes 'unformattedvalue' or 'previous'
+      if (!convertingObj2Value || currentPath.toLowerCase().includes('unformattedvalue') || currentPath.toLowerCase().includes('previous')) {
+        continue;
+      }
 
-    const { getByText } = render(
-      <ContextProvider>
-        <ChildComponent />
-      </ContextProvider>
+      // Extract currency values based on the current path.
+      const [firstKey, secondKey] = currentPath.split('.');
+      const Obj1CurrencyValue = dataGrid?.[firstKey]?.[secondKey]?.currency?.value;
+      const Obj2CurrencyValue = lcDetailsData?.[firstKey]?.[secondKey]?.currency?.value;
+
+      // Compute the change values using the decoded values (latest changes at the top).
+      let changesByBank = convertingObj2Value;
+      if (Obj2CurrencyValue) {
+        changesByBank = `${Obj2CurrencyValue} ${obj2[key]?.value ?? obj2[key]}`;
+      }
+      const keyName = secondKey;
+      changesByBank = CodeDecode(keyName, changesByBank);
+
+      let requestedChange = convertingObj1Value;
+      if (Obj1CurrencyValue) {
+        requestedChange = `${Obj1CurrencyValue} ${obj1[key]?.value ?? ''}`;
+      }
+      requestedChange = requestedChange ? CodeDecode(keyName, requestedChange) : "";
+
+      // Determine the appropriate label for the field.
+      const keyArray = currentPath.split('.');
+      const alternateCurrentPath = keyArray.slice(0, -1).join('.');
+      const fieldName =
+        defaultLOCData?.label?.[currentPath] ||
+        defaultLOCData?.label?.[alternateCurrentPath] ||
+        defaultLOCData?.label?.[`${currentPath}.value`] ||
+        currentPath;
+
+      differences.push({
+        fieldName,
+        requestedChange,
+        changesByBank,
+        keyName,
+      });
+    }
+  }
+  return differences;
+};
+
+// Lookup list for code decoding.
+const codeDecodeList: { [key: string]: string } = {
+  letterOfCreditType: 'LETTEROFCREDIT_TYPE',
+  amendmentType: 'AMENDMENT_TYPE',
+  amendmentChargePayableByCode: 'AMENDMENT_CHARGE_PAYABLE_BY',
+  purposeOfMessage: 'PURPOSE_OF_MESSAGE',
+  deliveryMode: 'LETTEROFCREDIT_SENTBY',
+  signatureVerified: 'SIGNATURE_VERIFIED',
+  underwriting: 'UNDERWRITING_BY',
+  formOfDocumentaryCredit: 'FORMS_OF_LETTEROFCREDIT',
+  applicableRules: 'APPLICABLE_RULES',
+  letterOfCreditExpiryPlace: 'LETTEROFCREDITEXPIRY_PLACE',
+  letterOfCreditExpiryCountry: 'COUNTRIES',
+  availableBy: 'AVAILABLE_BY',
+  availableWith: 'AVAILABLE_WITH',
+  draftDrawnOnDrawee: 'DRAFT_DRAWN_ON',
+  usancePeriod: 'USANCE_PERIOD',
+  confirmationInstructions: 'CONFIRMATION_INSTRUCTIONS',
+  reimbursementInstruction: 'REIMBURSEMENT_INSTRUCTIONS',
+  partialShipment: 'PARTIAL_SHIPMENT',
+  transhipment: 'TRANSHIPMENT',
+  presentationFrom: 'PRESENTATION_FROM',
+  incotermYear: 'INCOTERM_YEAR',
+  incoterm: 'INCOTERM',
+  modeOfShipment: 'MODES_OF_SHIPMENT',
+  insurancePaidBy: 'INSURANCE_PAID_BY',
+  insuranceCover: 'INSURANCE_COVER',
+  clientSpecifiedCharges: 'CHARGES',
+  advisingCharges: 'CHARGED_PARTY_EXCLUSION',
+  confirmationCharges: 'CHARGED_PARTY_EXCLUSION',
+  reimbursementAndRemittanceCharges: 'CHARGED_PARTY_EXCLUSION',
+  discrepancyCharges: 'CHARGED_PARTY_EXCLUSION',
+  reimbursingBankCharges: 'REIMBURSING_BANK_CHARGES',
+  discountingInterest: 'DISCOUNTING_INTEREST',
+};
+
+// Decodes a given code using the codeDecodeList and session storage data.
+export const CodeDecode = (molecule: string, val: any): any => {
+  if (!(molecule in codeDecodeList) || !val) return val;
+
+  const key = `${codeDecodeList[molecule]}_en`;
+  const modKey = `SC_*_${key}`;
+  let sessionObj: any = sessionStorage.getItem(key) || sessionStorage.getItem(modKey);
+
+  try {
+    sessionObj = JSON.parse(sessionObj);
+  } catch (e) {
+    sessionObj = null;
+  }
+
+  if (sessionObj) {
+    // Filter the code values based on the type of "val".
+    const code = sessionObj[codeDecodeList[molecule]]?.codeValues?.filter((element: any) => {
+      return typeof val === 'string'
+        ? element?.codeValue?.value === val
+        : element?.codeValue?.value === val?.value;
+    });
+
+    if (code && code.length && code[0]?.codeValue?.value && code[0]?.codeValueLocalDescription?.value) {
+      return `${code[0].codeValue.value} - ${code[0].codeValueLocalDescription.value}`;
+    }
+
+    // Special handling for letterOfCreditExpiryCountry.
+    if (molecule === 'letterOfCreditExpiryCountry') {
+      const codeAnother = sessionObj[codeDecodeList['TX_BOOKING_LOCATIONS']]?.codeValues?.filter((element: any) => {
+        return typeof val === 'string'
+          ? element?.codeValue?.value === val
+          : element?.codeValue?.value === val?.value;
+      });
+      if (codeAnother && codeAnother.length && codeAnother[0]?.codeValue?.value && codeAnother[0]?.codeValueLocalDescription?.value) {
+        return `${codeAnother[0].codeValue.value} - ${codeAnother[0].codeValueLocalDescription.value}`;
+      }
+    }
+  }
+  return val;
+};
+
+// Memoized callback to compare objects from the second data source.
+const compareObjectsFromSecond = useCallback((obj1, obj2, path = "", defaultLOCData, dataGrid, lcDetailsData) => {
+  return compareObjects(obj1, obj2, path, defaultLOCData, dataGrid, lcDetailsData);
+}, [defaultLOCData?.label]);
+
+// Effect to compare the objects and update the state with the differences.
+useEffect(() => {
+  if (dataGrid?.data && Object.keys(dataGrid?.data).length > 0 && lcDetailsData) {
+    let differencesFromSecond = compareObjectsFromSecond(
+      dataGrid?.data,
+      lcDetailsData,
+      "",
+      defaultLOCData,
+      dataGrid?.data,
+      lcDetailsData
     );
-
-    // Ensure child component rendered correctly
-    expect(getByText('value')).toBeInTheDocument();
-  });
-
-  it('should render without crashing when no children are provided', () => {
-    const { container } = render(<ContextProvider />);
-    expect(container).toBeDefined();
-  });
-});
+    // Check if differences array is empty.
+    if (apiAmdSummary?.length > 0 && differencesFromSecond.length <= 0) {
+      differencesFromSecond = apiAmdSummary.map((element) => ({
+        ...element,
+        ...(element.requestedChange ? { requestedChange: CodeDecode(element.keyName, element.requestedChange) } : {})
+      }));
+    }
+    if (apiAmdSummary?.length > 0) {
+      apiAmdSummary.forEach(element => {
+        const existObj = differencesFromSecond.find(obj => obj.fieldName === element.fieldName);
+        if (!existObj) {
+          differencesFromSecond.push({ ...element, requestedChange: CodeDecode(element.keyName, element.requestedChange) });
+        }
+      });
+    }
+    setState({ data: { state: differencesFromSecond, flag: false } }, 'amendmentSummary');
+  }
+}, [dataGrid, lcDetailsData, apiAmdSummary, compareObjectsFromSecond, defaultLOCData]);
