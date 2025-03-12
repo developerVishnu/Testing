@@ -1,130 +1,188 @@
-const convertValue = (value: any): string => {
-  if (typeof value?.value === 'boolean') {
-    return !!value?.value ? 'Yes' : 'No'
-  } else if (typeof value === 'boolean') {
-    return !!value ? "Yes" : 'No'
+// Helper: Converts a value (or value wrapper) to a string with proper formatting.
+const convertValue = (input: any): string => {
+  // If input is an object with a primitive "value", use that instead.
+  const value = input?.value !== undefined ? input.value : input;
+
+  if (typeof value === 'boolean') {
+    return value ? 'Yes' : 'No';
   } else if (typeof value === 'string') {
-    return value.split(' ').map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-  }else if(typeof value?.value === 'string'){
-    return value?.value?.split(' ').map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-  } if (typeof value?.value === 'number' || typeof value === 'number') {
-    return value?.value ?  `${value?.value}` : `${value}`;
+    // Capitalize first letter of each word.
+    return value
+      .split(' ')
+      .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  } else if (typeof value === 'number') {
+    // Handle number including 0 (0 is a valid value)
+    return `${value}`;
   }
   return '';
 };
 
-export const isEmptyReturnNull = (value) => {
-  return value === null || value === undefined || (typeof value === 'object' && Object.keys(value).length === 0)
+// Returns null if the provided value is null, undefined, or an empty object.
+export const isEmptyReturnNull = (value: any) => {
+  return value === null ||
+    value === undefined ||
+    (typeof value === 'object' && Object.keys(value).length === 0)
     ? null
     : value;
 };
-export const compareObjects =(obj1, obj2, path = "",defaultLOCData,dataGrid,lcDetailsData) => {
-  const differences:any = [];
-  let convertingObj1Value = '';
-  let convertingObj2Value = '';
+
+// Compares two objects recursively and returns an array of differences.
+export const compareObjects = (
+  obj1: any,
+  obj2: any,
+  path = "",
+  defaultLOCData: any,
+  dataGrid: any,
+  lcDetailsData: any
+) => {
+  const differences: any[] = [];
+
   for (const key in obj2) {
-    const exceptionFlag = (path?.toLowerCase()?.includes('unformattedvalue') || path?.toLowerCase()?.includes('filimitbookingdetails') || key === 'isChanged' || key === 'previous'
-    || path?.toLowerCase()?.includes('cancellationrequest')) ? false : true;
+    // Skip keys based on exception conditions.
+    const lowerPath = path.toLowerCase();
+    const exceptionFlag =
+      lowerPath.includes('unformattedvalue') ||
+      lowerPath.includes('filimitbookingdetails') ||
+      key === 'isChanged' ||
+      key === 'previous' ||
+      lowerPath.includes('cancellationrequest')
+        ? false
+        : true;
 
-    if (obj2.hasOwnProperty(key) && exceptionFlag) {
-      const currentPath = path ? `${path}.${key}` : key;
+    if (!obj2.hasOwnProperty(key) || !exceptionFlag) {
+      continue;
+    }
 
-      if (_.isObject(obj2[key]) && obj1[key]) {
-        // Recursive comparison for nested objects
-        differences.push(...compareObjects(obj1[key], obj2[key], currentPath,defaultLOCData,dataGrid,lcDetailsData));
-      } 
-      else if (!_.isEqual(isEmptyReturnNull(obj1[key]), isEmptyReturnNull(obj2[key]))) {
-        const decreaseInAmount = currentPath?.includes?.('decreaseInAmount');
-        const inAmountChanged = (!!obj1[key] || !!obj2[key]?.currency?.value || !!obj2[key]?.formattedValue?.value);
-        const decreaseInAmountFlag = decreaseInAmount ? (decreaseInAmount && inAmountChanged) ? false : true : false;
-        convertingObj1Value = convertValue(obj1[key]);
-        convertingObj2Value = convertValue(obj2[key]);
-        if(!!convertingObj2Value)
-        {
-          if(currentPath.toLocaleLowerCase().includes('unformattedvalue') || currentPath.toLocaleLowerCase().includes('previous')){
-            continue ;
-          }
-        
-          const Obj1CurrencyValue = dataGrid[currentPath.split('.')[0]]?.[currentPath.split('.')[1]]?.['currency']?.['value']  ? dataGrid[currentPath.split('.')[0]]?.[currentPath.split('.')[1]]?.['currency']?.['value'] : undefined;
-          const Obj2CurrencyValue = lcDetailsData[currentPath.split('.')[0]]?.[currentPath.split('.')[1]]?.['currency']?.['value']  ? lcDetailsData[currentPath.split('.')[0]]?.[currentPath.split('.')[1]]?.['currency']?.['value'] : undefined;
-          let changesByBank = convertingObj2Value || (Obj2CurrencyValue ? `${Obj2CurrencyValue} ${obj2[key]?.value ?? obj2[key]}`: obj2[key]);
-          const keyName = currentPath?.split('.')[1];
-          changesByBank = CodeDecode(keyName,changesByBank)
-          console.log("keyName,changesByBank", convertingObj1Value, path)
+    const currentPath = path ? `${path}.${key}` : key;
 
-          let requestedChange = convertingObj1Value || (Obj1CurrencyValue ? `${Obj1CurrencyValue} ${obj1[key]?.value ?? obj1[key] ?? ''}` : obj1[key])
-          requestedChange = requestedChange ? CodeDecode(keyName, requestedChange) : "";
-          // If value has changed, add to differences
-          const keyArray = currentPath?.split('.')
-          const alternateCurrentPath = keyArray.slice(0,-1).join('.')
-          differences.push({
-            fieldName: defaultLOCData?.label?.[currentPath] ?? defaultLOCData?.label?.[alternateCurrentPath] ?? defaultLOCData?.label?.[currentPath+".value"] ?? currentPath,
-            requestedChange,
-            changesByBank,
-            keyName
-          },);
-        }
+    // If both values are objects, do a recursive compare.
+    if (_.isObject(obj2[key]) && obj1[key]) {
+      differences.push(
+        ...compareObjects(obj1[key], obj2[key], currentPath, defaultLOCData, dataGrid, lcDetailsData)
+      );
+    } else if (!_.isEqual(isEmptyReturnNull(obj1[key]), isEmptyReturnNull(obj2[key]))) {
+      // Convert values for comparison and display.
+      const convertingObj1Value = convertValue(obj1[key]);
+      const convertingObj2Value = convertValue(obj2[key]);
+
+      // Skip changes where the field name includes 'unformattedvalue' or 'previous'
+      if (!convertingObj2Value || currentPath.toLowerCase().includes('unformattedvalue') || currentPath.toLowerCase().includes('previous')) {
+        continue;
       }
+
+      // Extract currency values based on the current path.
+      const [firstKey, secondKey] = currentPath.split('.');
+      const Obj1CurrencyValue = dataGrid?.[firstKey]?.[secondKey]?.currency?.value;
+      const Obj2CurrencyValue = lcDetailsData?.[firstKey]?.[secondKey]?.currency?.value;
+
+      // Compute the change values using the decoded values (latest changes at the top).
+      let changesByBank = convertingObj2Value;
+      if (Obj2CurrencyValue) {
+        changesByBank = `${Obj2CurrencyValue} ${obj2[key]?.value ?? obj2[key]}`;
+      }
+      const keyName = secondKey;
+      changesByBank = CodeDecode(keyName, changesByBank);
+
+      let requestedChange = convertingObj1Value;
+      if (Obj1CurrencyValue) {
+        requestedChange = `${Obj1CurrencyValue} ${obj1[key]?.value ?? ''}`;
+      }
+      requestedChange = requestedChange ? CodeDecode(keyName, requestedChange) : "";
+
+      // Determine the appropriate label for the field.
+      const keyArray = currentPath.split('.');
+      const alternateCurrentPath = keyArray.slice(0, -1).join('.');
+      const fieldName =
+        defaultLOCData?.label?.[currentPath] ||
+        defaultLOCData?.label?.[alternateCurrentPath] ||
+        defaultLOCData?.label?.[`${currentPath}.value`] ||
+        currentPath;
+
+      differences.push({
+        fieldName,
+        requestedChange,
+        changesByBank,
+        keyName,
+      });
     }
   }
   return differences;
-}
+};
 
-const codeDecodeList = {
-  'letterOfCreditType': 'LETTEROFCREDIT_TYPE',
-  'amendmentType': 'AMENDMENT_TYPE',
-  'amendmentChargePayableByCode':'AMENDMENT_CHARGE_PAYABLE_BY',
-  'purposeOfMessage':'PURPOSE_OF_MESSAGE',
-  'deliveryMode':'LETTEROFCREDIT_SENTBY',
-  'signatureVerified':'SIGNATURE_VERIFIED',
-  'underwriting':'UNDERWRITING_BY',
-  'formOfDocumentaryCredit':'FORMS_OF_LETTEROFCREDIT',
-  'applicableRules':'APPLICABLE_RULES',
-  'letterOfCreditExpiryPlace':'LETTEROFCREDITEXPIRY_PLACE',
-  'letterOfCreditExpiryCountry':'COUNTRIES',
-  'availableBy':'AVAILABLE_BY',
-  'availableWith':'AVAILABLE_WITH',
-  'draftDrawnOnDrawee':'DRAFT_DRAWN_ON',
-  'usancePeriod':'USANCE_PERIOD',
-  'confirmationInstructions':'CONFIRMATION_INSTRUCTIONS',
-  'reimbursementInstruction':'REIMBURSEMENT_INSTRUCTIONS',
-  'partialShipment':'PARTIAL_SHIPMENT',
-  'transhipment':'TRANSHIPMENT',
-  'presentationFrom':'PRESENTATION_FROM',
-  'incotermYear':'INCOTERM_YEAR',
-  'incoterm':'INCOTERM',
-  'modeOfShipment':'MODES_OF_SHIPMENT',
-  'insurancePaidBy':'INSURANCE_PAID_BY',
-  'insuranceCover':'INSURANCE_COVER',
-  'clientSpecifiedCharges':'CHARGES',
-  'advisingCharges':'CHARGED_PARTY_EXCLUSION',
-  'confirmationCharges':'CHARGED_PARTY_EXCLUSION',
-  'reimbursementAndRemittanceCharges':'CHARGED_PARTY_EXCLUSION',
-  'discrepancyCharges':'CHARGED_PARTY_EXCLUSION',
-  'reimbursingBankCharges':'REIMBURSING_BANK_CHARGES',
-  'discountingInterest':'DISCOUNTING_INTEREST'}
-export const CodeDecode = (molecule,val):any => {
-  if(!(molecule in codeDecodeList) && !val)
-  return val
-  else {
-    const key = codeDecodeList[molecule]+'_en';
-    const modKey = 'SC_*_'+key
-    let sessionObj:any = sessionStorage.getItem(key) || sessionStorage.getItem(modKey);
+// Lookup list for code decoding.
+const codeDecodeList: { [key: string]: string } = {
+  letterOfCreditType: 'LETTEROFCREDIT_TYPE',
+  amendmentType: 'AMENDMENT_TYPE',
+  amendmentChargePayableByCode: 'AMENDMENT_CHARGE_PAYABLE_BY',
+  purposeOfMessage: 'PURPOSE_OF_MESSAGE',
+  deliveryMode: 'LETTEROFCREDIT_SENTBY',
+  signatureVerified: 'SIGNATURE_VERIFIED',
+  underwriting: 'UNDERWRITING_BY',
+  formOfDocumentaryCredit: 'FORMS_OF_LETTEROFCREDIT',
+  applicableRules: 'APPLICABLE_RULES',
+  letterOfCreditExpiryPlace: 'LETTEROFCREDITEXPIRY_PLACE',
+  letterOfCreditExpiryCountry: 'COUNTRIES',
+  availableBy: 'AVAILABLE_BY',
+  availableWith: 'AVAILABLE_WITH',
+  draftDrawnOnDrawee: 'DRAFT_DRAWN_ON',
+  usancePeriod: 'USANCE_PERIOD',
+  confirmationInstructions: 'CONFIRMATION_INSTRUCTIONS',
+  reimbursementInstruction: 'REIMBURSEMENT_INSTRUCTIONS',
+  partialShipment: 'PARTIAL_SHIPMENT',
+  transhipment: 'TRANSHIPMENT',
+  presentationFrom: 'PRESENTATION_FROM',
+  incotermYear: 'INCOTERM_YEAR',
+  incoterm: 'INCOTERM',
+  modeOfShipment: 'MODES_OF_SHIPMENT',
+  insurancePaidBy: 'INSURANCE_PAID_BY',
+  insuranceCover: 'INSURANCE_COVER',
+  clientSpecifiedCharges: 'CHARGES',
+  advisingCharges: 'CHARGED_PARTY_EXCLUSION',
+  confirmationCharges: 'CHARGED_PARTY_EXCLUSION',
+  reimbursementAndRemittanceCharges: 'CHARGED_PARTY_EXCLUSION',
+  discrepancyCharges: 'CHARGED_PARTY_EXCLUSION',
+  reimbursingBankCharges: 'REIMBURSING_BANK_CHARGES',
+  discountingInterest: 'DISCOUNTING_INTEREST',
+};
+
+// Decodes a given code using the codeDecodeList and session storage data.
+export const CodeDecode = (molecule: string, val: any): any => {
+  if (!(molecule in codeDecodeList) || !val) return val;
+
+  const key = `${codeDecodeList[molecule]}_en`;
+  const modKey = `SC_*_${key}`;
+  let sessionObj: any = sessionStorage.getItem(key) || sessionStorage.getItem(modKey);
+
+  try {
     sessionObj = JSON.parse(sessionObj);
-    if(!!sessionObj){
-      const code = sessionObj[codeDecodeList[molecule]]?.codeValues?.filter((element) => typeof val === 'string' && element?.codeValue?.value === val || typeof val === 'object' && element?.codeValue?.value === val?.value)
-      if(!!code){
-        if(!!code[0]?.codeValue?.value && !!code[0]?.codeValueLocalDescription?.value)
-        return code[0]?.codeValue?.value+" - "+code[0]?.codeValueLocalDescription?.value
-      }
-      if(molecule === 'letterOfCreditExpiryCountry'){
-        const codeAnother = sessionObj[codeDecodeList['TX_BOOKING_LOCATIONS']]?.codeValues?.filter((element) => typeof val === 'string' && element?.codeValue?.value === val || typeof val === 'object' && element?.codeValue?.value === val?.value)
-        if(!!codeAnother){
-          if(!!codeAnother[0]?.codeValue?.value && !!codeAnother[0]?.codeValueLocalDescription?.value)
-          return codeAnother[0]?.codeValue?.value+" - "+codeAnother[0]?.codeValueLocalDescription?.value
-        }
+  } catch (e) {
+    sessionObj = null;
+  }
+
+  if (sessionObj) {
+    // Filter the code values based on the type of "val".
+    const code = sessionObj[codeDecodeList[molecule]]?.codeValues?.filter((element: any) => {
+      return typeof val === 'string'
+        ? element?.codeValue?.value === val
+        : element?.codeValue?.value === val?.value;
+    });
+
+    if (code && code.length && code[0]?.codeValue?.value && code[0]?.codeValueLocalDescription?.value) {
+      return `${code[0].codeValue.value} - ${code[0].codeValueLocalDescription.value}`;
+    }
+
+    // Special handling for letterOfCreditExpiryCountry.
+    if (molecule === 'letterOfCreditExpiryCountry') {
+      const codeAnother = sessionObj[codeDecodeList['TX_BOOKING_LOCATIONS']]?.codeValues?.filter((element: any) => {
+        return typeof val === 'string'
+          ? element?.codeValue?.value === val
+          : element?.codeValue?.value === val?.value;
+      });
+      if (codeAnother && codeAnother.length && codeAnother[0]?.codeValue?.value && codeAnother[0]?.codeValueLocalDescription?.value) {
+        return `${codeAnother[0].codeValue.value} - ${codeAnother[0].codeValueLocalDescription.value}`;
       }
     }
   }
-  return val; 
-}
+  return val;
+};
