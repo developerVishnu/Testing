@@ -1,129 +1,161 @@
-import React, { useEffect, useState } from "react";
-import { get, set, cloneDeep } from 'lodash';
-import { TXInput } from "@atoms/TXInput";
-import { isObjectEmpty, getCodeDecodeList, getValueFromPath } from "@utils/index";
-import { TXRemarks } from "@tradexpress/schemas/dist/TXRemarks";
-import { Default } from "./default";
-import { ITXRiskIndicatorListInterface } from "./interface";
-import { getList, getRemarksDisabledAndRequiredValue } from "./utils";
-import * as Styled from "./styled";
-import { useTranslation } from "react-i18next";
+import React from 'react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import '@testing-library/jest-dom/extend-expect';
 
-export const TXRiskIndicatorList = (props: ITXRiskIndicatorListInterface) => {
-  const { t } = useTranslation();
-  const { onChange, value, path, name, remarksName, riskIndicatorArrayName, displayType, disabledConditions } = props;
-  const [currentFields, setCurrentFields] = useState<any>(undefined);
-  const [fetching, setFetching] = useState<boolean>(false);
-  const [codeValues, setCodeValues] = useState<any>(undefined);
-  const [riskIndicatorItems, setRiskIndicatorItems] = useState<any>(undefined);
+// Mocks
+jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (k) => k }) }));
 
-  /** Get data from value props */
-  // useEffect(() => {
-  //   setCurrentFields(cloneDeep(get(value, path || name || '', undefined)))
-  // }, [value]);
-
-  /** Get codeDecode data for RISK_INDICATORS */
-  useEffect(() => {
-    setFetching(true);
-    getCodeDecodeList({ codeId: "RISK_INDICATORS" }).then((codeData: any) => {
-      setFetching(false);
-      !!codeData && !!codeData?.RISK_INDICATORS?.codeValues && setCodeValues(codeData.RISK_INDICATORS.codeValues)
-    }).catch(() => setFetching(false));
-  }, []);
-
-  /** Generate new array of data for rendering list purpose */
-  useEffect(() => {
-    if (!isObjectEmpty(value)) {
-      let tempArray:any = []
-      setRiskIndicatorItems(cloneDeep(get(value, `${name}.${riskIndicatorArrayName}`))?.map((item: any) => {
-        const description = codeValues?.find( (i) => getValueFromPath(i, "codeValue") === getValueFromPath(item, "riskindicatorid"));
-        let riskIndicatorDescriptionSubText = "";
-        let riskIndicatorDescription = !!description ? getValueFromPath(description, "codeValueLocalDescription") : undefined;
-        if(!!riskIndicatorDescription) {
-          const splitText = riskIndicatorDescription.split("(");
-          if(splitText.length === 2) {
-            riskIndicatorDescription = splitText[0].trim();
-            riskIndicatorDescriptionSubText = "(" + splitText[1];
-          }
+jest.mock('@atoms/TXInput', () => ({
+  TXInput: (props) => {
+    // Simple textarea that calls props.onChange with an object matching the component expectation
+    return (
+      <textarea
+        data-testid="remarks"
+        name={props.name}
+        value={
+          // try to surface a sensible string if props.value is an object
+          (props.value && (props.value.value || props.value.riskindicatorflag?.value || '')) || ''
         }
+        onChange={(e) => props.onChange && props.onChange({ [props.name]: { value: e.target.value } })}
+      />
+    );
+  },
+}));
 
-        tempArray.push({
-          ...item,
-          riskindicatordescription : {value : riskIndicatorDescription}
-        })
-     
-        return {
-          ...item,
-          riskIndicatorDescription,
-          riskIndicatorDescriptionSubText,
-        };
-      }))
+// Simple styled container mock so we can query its presence
+jest.mock('./styled', () => ({
+  Container: ({ children }) => <div data-testid="container">{children}</div>,
+}));
 
-      setCurrentFields({
-        ...cloneDeep(get(value, path || name || '', undefined)),
-        [riskIndicatorArrayName as string]: tempArray
-      })
-    }
-  }, [value, codeValues]);
+// Mock getList to render a button which will call the passed handler (simulates radio change)
+jest.mock('./utils', () => {
+  const React = require('react');
+  return {
+    getList: (item, i, handleRadioGroupOnChange /*, options */) => {
+      const id = item && (item.riskindicatorid?.value ?? item.riskindicatorid ?? item) || `idx-${i}`;
+      return React.createElement(
+        'button',
+        {
+          'data-testid': `radio-${id}`,
+          onClick: () => handleRadioGroupOnChange('false', id), // simulate selecting 'false'
+        },
+        `toggle-${id}`,
+      );
+    },
+    getRemarksDisabledAndRequiredValue: jest.fn(() => ({})),
+  };
+});
 
-  const handleRadioGroupOnChange = (value: any, riskindicatorid: any) => {
-    const riskArray = cloneDeep(currentFields?.[riskIndicatorArrayName as string]);
-    const riskIndex = riskArray.findIndex(i => getValueFromPath(i, 'riskindicatorid') === riskindicatorid);
+// We'll capture calls to the actual helper so tests can control its response
+const mockGetCodeDecodeList = jest.fn();
 
-    const newData = {
-      ...currentFields,
-      [riskIndicatorArrayName as string]: set(riskArray, `[${riskIndex}]`, {
-        ...get(riskArray, `[${riskIndex}]`, {}),
-        riskindicatorflag: { value: value },
-        riskindicatorid: { value: riskindicatorid },
-        ...(riskindicatorid === "RI-999" && value === "false") ? {[remarksName as string]: { value: '' }} : {},
-      })
+jest.mock('@utils/index', () => ({
+  isObjectEmpty: jest.fn((v) => Object.keys(v || {}).length === 0),
+  getCodeDecodeList: (args) => mockGetCodeDecodeList(args),
+  getValueFromPath: (obj, path) => {
+    if (obj == null) return undefined;
+    if (typeof obj === 'object') return obj[path] ?? obj;
+    return obj;
+  },
+}));
+
+// Component under test
+import { TXRiskIndicatorList } from './TXRiskIndicatorList';
+
+describe('TXRiskIndicatorList (unit)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('returns null (does not render) when value is empty', () => {
+    const props = {
+      value: {},
+      name: 'tx',
+      riskIndicatorArrayName: 'riskArray',
+      remarksName: 'remarks',
+      onChange: jest.fn(),
+      path: '',
     };
 
-    setCurrentFields(newData);
-    onChange?.(newData);
-  };
+    render(<TXRiskIndicatorList {...props} />);
 
-  const handleRemarksOnChange = (value: any) => {
-    const riskArray = cloneDeep(currentFields?.[riskIndicatorArrayName as string]);
-    const riskIndex = riskArray.findIndex(i => getValueFromPath(i, 'riskindicatorid') === "RI-999");
-    const newData = { 
-      ...currentFields, 
-      [riskIndicatorArrayName as string]: set(riskArray, `[${riskIndex}]`, {
-      ...get(riskArray, `[${riskIndex}]`, {}),
-      ...value
-    })};
-    setCurrentFields(newData);
-    onChange?.(newData);
-  };
+    // Component should render nothing when `isObjectEmpty(value)` is true
+    expect(screen.queryByTestId('container')).not.toBeInTheDocument();
+  });
 
-  return !isObjectEmpty(value) ? (
-    <Styled.Container>
-      <tx-core-grid>
-        <tx-core-column xs="24" sm="12" md="12" lg="12" xl="12">
-          {!!riskIndicatorItems && riskIndicatorItems.slice(0, 4)
-            .map((item, i) => getList(item, i, handleRadioGroupOnChange, {displayType, disabledConditions, disabled: fetching}))
-          }
-        </tx-core-column>
-        <tx-core-column xs="24" sm="12" md="12" lg="12" xl="12">
-          {!!riskIndicatorItems && riskIndicatorItems.slice(4)
-            .map((item, i) => getList(item, i, handleRadioGroupOnChange, {displayType, disabledConditions, disabled: fetching}))
-          }
-          <TXInput
-            label={t('Manual AML Remarks RI-999')}
-            placeholder={t('Enter Remarks...')}
-            type="textarea"
-            name={remarksName}
-            schema={TXRemarks}
-            maxCharacterLimit={256}
-            value={currentFields?.[riskIndicatorArrayName as string]?.[4]}
-            onChange={handleRemarksOnChange}
-            {...getRemarksDisabledAndRequiredValue(props, get(currentFields, riskIndicatorArrayName as string))}
-          />
-        </tx-core-column>
-      </tx-core-grid>
-    </Styled.Container>
-  ) : null;
-};
+  test('fetches code list, renders risk items and handles radio & remarks onChange flows', async () => {
+    // Prepare mocked code values that the component expects
+    const codeValues = [
+      { codeValue: 'RI-999', codeValueLocalDescription: 'Manual AML Remarks RI-999 (extra)' },
+      { codeValue: 'RI-001', codeValueLocalDescription: 'Indicator 1' },
+    ];
 
-TXRiskIndicatorList.defaultProps = Default;
+    mockGetCodeDecodeList.mockResolvedValue({ RISK_INDICATORS: { codeValues } });
+
+    // Provide a value prop that contains 5 items (the component slices by index and shows the 5th as remarks)
+    const value = {
+      tx: {
+        riskArray: [
+          { riskindicatorid: 'RI-001', riskindicatorflag: { value: 'true' } },
+          { riskindicatorid: 'RI-002' },
+          { riskindicatorid: 'RI-003' },
+          { riskindicatorid: 'RI-004' },
+          { riskindicatorid: 'RI-999' },
+        ],
+      },
+    };
+
+    const onChange = jest.fn();
+
+    render(
+      <TXRiskIndicatorList
+        value={value}
+        name="tx"
+        riskIndicatorArrayName="riskArray"
+        remarksName="remarks"
+        onChange={onChange}
+      />,
+    );
+
+    // Wait for the async code list fetch useEffect to run
+    await waitFor(() => expect(mockGetCodeDecodeList).toHaveBeenCalled());
+
+    // The mocked getList produces buttons with data-testid `radio-<ID>`; ensure the RI-999 button exists
+    const ri999Button = await screen.findByTestId('radio-RI-999');
+    expect(ri999Button).toBeInTheDocument();
+
+    // Click the RI-999 radio button which our mock will call handleRadioGroupOnChange('false', 'RI-999')
+    fireEvent.click(ri999Button);
+
+    // onChange should have been invoked with updated data
+    expect(onChange).toHaveBeenCalled();
+    const firstCallData = onChange.mock.calls[0][0];
+
+    // The top-level object should include the risk array
+    expect(firstCallData).toHaveProperty('riskArray');
+
+    // Find the modified RI-999 item
+    const ri999ItemAfterRadio = firstCallData.riskArray.find((x) => (x.riskindicatorid?.value ?? x.riskindicatorid) === 'RI-999');
+    expect(ri999ItemAfterRadio).toBeDefined();
+
+    // The handler sets a nested object for the flag and id
+    expect(ri999ItemAfterRadio.riskindicatorflag.value).toBe('false');
+    expect(ri999ItemAfterRadio.riskindicatorid.value).toBe('RI-999');
+
+    // When radio changed to false for RI-999, the component sets the top-level remarksName to an empty string
+    expect(firstCallData.remarks).toEqual({ value: '' });
+
+    // Now change the remarks textarea (our TXInput mock will call props.onChange with { remarks: { value: '...' } })
+    const remarksTextarea = screen.getByTestId('remarks');
+    fireEvent.change(remarksTextarea, { target: { value: 'This is a manual remark' } });
+
+    // onChange should be called again with the updated remark merged into the RI-999 item
+    expect(onChange).toHaveBeenCalledTimes(2);
+    const secondCallData = onChange.mock.calls[1][0];
+    const ri999ItemAfterRemarks = secondCallData.riskArray.find((x) => (x.riskindicatorid?.value ?? x.riskindicatorid) === 'RI-999');
+    expect(ri999ItemAfterRemarks).toBeDefined();
+
+    // The handleRemarksOnChange merges the provided value into that array item
+    expect(ri999ItemAfterRemarks.remarks.value).toBe('This is a manual remark');
+  });
+});
