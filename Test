@@ -1,214 +1,129 @@
-// Helper: Converts a value (or value wrapper) to a string with proper formatting.
-const convertValue = (input: any): string => {
-  // If input is an object with a primitive "value", use that instead.
-  const value = input?.value !== undefined ? input.value : input;
+import React, { useEffect, useState } from "react";
+import { get, set, cloneDeep } from 'lodash';
+import { TXInput } from "@atoms/TXInput";
+import { isObjectEmpty, getCodeDecodeList, getValueFromPath } from "@utils/index";
+import { TXRemarks } from "@tradexpress/schemas/dist/TXRemarks";
+import { Default } from "./default";
+import { ITXRiskIndicatorListInterface } from "./interface";
+import { getList, getRemarksDisabledAndRequiredValue } from "./utils";
+import * as Styled from "./styled";
+import { useTranslation } from "react-i18next";
 
-  if (typeof value === 'boolean') {
-    return value ? 'Yes' : 'No';
-  } else if (typeof value === 'string') {
-    // Capitalize first letter of each word.
-    return value
-      .split(' ')
-      .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ');
-  } else if (typeof value === 'number') {
-    // Handle number including 0 (0 is a valid value)
-    return `${value}`;
-  }
-  return '';
-};
+export const TXRiskIndicatorList = (props: ITXRiskIndicatorListInterface) => {
+  const { t } = useTranslation();
+  const { onChange, value, path, name, remarksName, riskIndicatorArrayName, displayType, disabledConditions } = props;
+  const [currentFields, setCurrentFields] = useState<any>(undefined);
+  const [fetching, setFetching] = useState<boolean>(false);
+  const [codeValues, setCodeValues] = useState<any>(undefined);
+  const [riskIndicatorItems, setRiskIndicatorItems] = useState<any>(undefined);
 
-// Returns null if the provided value is null, undefined, or an empty object.
-export const isEmptyReturnNull = (value: any) => {
-  return value === null ||
-    value === undefined ||
-    (typeof value === 'object' && Object.keys(value).length === 0)
-    ? null
-    : value;
-};
+  /** Get data from value props */
+  // useEffect(() => {
+  //   setCurrentFields(cloneDeep(get(value, path || name || '', undefined)))
+  // }, [value]);
 
-// Compares two objects recursively and returns an array of differences.
-export const compareObjects = (
-  obj1: any,
-  obj2: any,
-  path = "",
-  defaultLOCData: any,
-  dataGrid: any,
-  lcDetailsData: any
-) => {
-  const differences: any[] = [];
-
-  for (const key in obj2) {
-    // Skip keys based on exception conditions.
-    const lowerPath = path.toLowerCase();
-    const exceptionFlag =
-      lowerPath.includes('unformattedvalue') ||
-      lowerPath.includes('filimitbookingdetails') ||
-      key === 'isChanged' ||
-      key === 'previous' ||
-      lowerPath.includes('cancellationrequest')
-        ? false
-        : true;
-
-    if (!obj2.hasOwnProperty(key) || !exceptionFlag) {
-      continue;
-    }
-
-    const currentPath = path ? `${path}.${key}` : key;
-
-    // If both values are objects, do a recursive compare.
-    if (_.isObject(obj2[key]) && obj1[key]) {
-      differences.push(
-        ...compareObjects(obj1[key], obj2[key], currentPath, defaultLOCData, dataGrid, lcDetailsData)
-      );
-    } else if (!_.isEqual(isEmptyReturnNull(obj1[key]), isEmptyReturnNull(obj2[key]))) {
-      // Convert values for comparison and display.
-      const convertingObj1Value = convertValue(obj1[key]);
-      const convertingObj2Value = convertValue(obj2[key]);
-
-      // Skip changes where the field name includes 'unformattedvalue' or 'previous'
-      if (!convertingObj2Value || currentPath.toLowerCase().includes('unformattedvalue') || currentPath.toLowerCase().includes('previous')) {
-        continue;
-      }
-
-      // Extract currency values based on the current path.
-      const [firstKey, secondKey] = currentPath.split('.');
-      const Obj1CurrencyValue = dataGrid?.[firstKey]?.[secondKey]?.currency?.value;
-      const Obj2CurrencyValue = lcDetailsData?.[firstKey]?.[secondKey]?.currency?.value;
-
-      // Compute the change values using the decoded values (latest changes at the top).
-      let changesByBank = convertingObj2Value;
-      if (Obj2CurrencyValue) {
-        changesByBank = `${Obj2CurrencyValue} ${obj2[key]?.value ?? obj2[key]}`;
-      }
-      const keyName = secondKey;
-      changesByBank = CodeDecode(keyName, changesByBank);
-
-      let requestedChange = convertingObj1Value;
-      if (Obj1CurrencyValue) {
-        requestedChange = `${Obj1CurrencyValue} ${obj1[key]?.value ?? ''}`;
-      }
-      requestedChange = requestedChange ? CodeDecode(keyName, requestedChange) : "";
-
-      // Determine the appropriate label for the field.
-      const keyArray = currentPath.split('.');
-      const alternateCurrentPath = keyArray.slice(0, -1).join('.');
-      const fieldName =
-        defaultLOCData?.label?.[currentPath] ||
-        defaultLOCData?.label?.[alternateCurrentPath] ||
-        defaultLOCData?.label?.[`${currentPath}.value`] ||
-        currentPath;
-
-      differences.push({
-        fieldName,
-        requestedChange,
-        changesByBank,
-        keyName,
-      });
-    }
-  }
-  return differences;
-};
-
-// Lookup list for code decoding.
-const codeDecodeList: { [key: string]: string } = {
-  letterOfCreditType: 'LETTEROFCREDIT_TYPE',
-  amendmentType: 'AMENDMENT_TYPE',
-  amendmentChargePayableByCode: 'AMENDMENT_CHARGE_PAYABLE_BY',
-  purposeOfMessage: 'PURPOSE_OF_MESSAGE',
-  deliveryMode: 'LETTEROFCREDIT_SENTBY',
-  signatureVerified: 'SIGNATURE_VERIFIED',
-  underwriting: 'UNDERWRITING_BY',
-  formOfDocumentaryCredit: 'FORMS_OF_LETTEROFCREDIT',
-  applicableRules: 'APPLICABLE_RULES',
-  letterOfCreditExpiryPlace: 'LETTEROFCREDITEXPIRY_PLACE',
-  letterOfCreditExpiryCountry: 'COUNTRIES',
-  availableBy: 'AVAILABLE_BY',
-  availableWith: 'AVAILABLE_WITH',
-  draftDrawnOnDrawee: 'DRAFT_DRAWN_ON',
-  usancePeriod: 'USANCE_PERIOD',
-  confirmationInstructions: 'CONFIRMATION_INSTRUCTIONS',
-  reimbursementInstruction: 'REIMBURSEMENT_INSTRUCTIONS',
-  partialShipment: 'PARTIAL_SHIPMENT',
-  transhipment: 'TRANSHIPMENT',
-  presentationFrom: 'PRESENTATION_FROM',
-  incotermYear: 'INCOTERM_YEAR',
-  incoterm: 'INCOTERM',
-  modeOfShipment: 'MODES_OF_SHIPMENT',
-  insurancePaidBy: 'INSURANCE_PAID_BY',
-  insuranceCover: 'INSURANCE_COVER',
-  clientSpecifiedCharges: 'CHARGES',
-  advisingCharges: 'CHARGED_PARTY_EXCLUSION',
-  confirmationCharges: 'CHARGED_PARTY_EXCLUSION',
-  reimbursementAndRemittanceCharges: 'CHARGED_PARTY_EXCLUSION',
-  discrepancyCharges: 'CHARGED_PARTY_EXCLUSION',
-  reimbursingBankCharges: 'REIMBURSING_BANK_CHARGES',
-  discountingInterest: 'DISCOUNTING_INTEREST',
-};
-
-// Decodes a given code using the codeDecodeList and session storage data.
-export const CodeDecode = (molecule: string, val: any): any => {
-  if (!(molecule in codeDecodeList) || !val) return val;
-
-  const key = `${codeDecodeList[molecule]}_en`;
-  const modKey = `SC_*_${key}`;
-  let sessionObj: any = sessionStorage.getItem(key) || sessionStorage.getItem(modKey);
-
-  try {
-    sessionObj = JSON.parse(sessionObj);
-  } catch (e) {
-    sessionObj = null;
-  }
-
-  if (sessionObj) {
-    // Filter the code values based on the type of "val".
-    const code = sessionObj[codeDecodeList[molecule]]?.codeValues?.filter((element: any) => {
-      return typeof val === 'string'
-        ? element?.codeValue?.value === val
-        : element?.codeValue?.value === val?.value;
-    });
-
-    if (code && code.length && code[0]?.codeValue?.value && code[0]?.codeValueLocalDescription?.value) {
-      return `${code[0].codeValue.value} - ${code[0].codeValueLocalDescription.value}`;
-    }
-
-    // Special handling for letterOfCreditExpiryCountry.
-    if (molecule === 'letterOfCreditExpiryCountry') {
-      const codeAnother = sessionObj[codeDecodeList['TX_BOOKING_LOCATIONS']]?.codeValues?.filter((element: any) => {
-        return typeof val === 'string'
-          ? element?.codeValue?.value === val
-          : element?.codeValue?.value === val?.value;
-      });
-      if (codeAnother && codeAnother.length && codeAnother[0]?.codeValue?.value && codeAnother[0]?.codeValueLocalDescription?.value) {
-        return `${codeAnother[0].codeValue.value} - ${codeAnother[0].codeValueLocalDescription.value}`;
-      }
-    }
-  }
-  return val;
-};
-
-  const compareObjectsFromSecond = useCallback((obj1, obj2, path = "",defaultLOCData,dataGrid,lcDetailsData)=>{
-    return compareObjects(obj1, obj2,path = "",defaultLOCData,dataGrid,lcDetailsData);
-  },[defaultLOCData?.label]);
-
+  /** Get codeDecode data for RISK_INDICATORS */
   useEffect(() => {
-    // Compare the objects and get only the changes from the second object (updated data)
-    if (dataGrid?.data &&  Object.keys(dataGrid?.data).length > 0 && lcDetailsData) {
-      let differencesFromSecond = compareObjectsFromSecond(dataGrid?.data, lcDetailsData, undefined, defaultLOCData,dataGrid?.data,lcDetailsData);
-      if (apiAmdSummary?.length > 0 && differencesFromSecond.length <= 0) {
-        differencesFromSecond = apiAmdSummary.map((element) => ({
-          ...element,
-          ...(!!element.requestedChange ? {requestedChange: CodeDecode(element.keyName,element.requestedChange)}:{})
-        }))
-      }
-      if (apiAmdSummary?.length > 0) {
-        apiAmdSummary?.forEach(element => {
-          const existObj = differencesFromSecond?.find(obj => obj.fieldName === element.fieldName);
-          if (!existObj) {
-            differencesFromSecond.push({...element, requestedChange: CodeDecode(element.keyName, element.requestedChange)});
+    setFetching(true);
+    getCodeDecodeList({ codeId: "RISK_INDICATORS" }).then((codeData: any) => {
+      setFetching(false);
+      !!codeData && !!codeData?.RISK_INDICATORS?.codeValues && setCodeValues(codeData.RISK_INDICATORS.codeValues)
+    }).catch(() => setFetching(false));
+  }, []);
+
+  /** Generate new array of data for rendering list purpose */
+  useEffect(() => {
+    if (!isObjectEmpty(value)) {
+      let tempArray:any = []
+      setRiskIndicatorItems(cloneDeep(get(value, `${name}.${riskIndicatorArrayName}`))?.map((item: any) => {
+        const description = codeValues?.find( (i) => getValueFromPath(i, "codeValue") === getValueFromPath(item, "riskindicatorid"));
+        let riskIndicatorDescriptionSubText = "";
+        let riskIndicatorDescription = !!description ? getValueFromPath(description, "codeValueLocalDescription") : undefined;
+        if(!!riskIndicatorDescription) {
+          const splitText = riskIndicatorDescription.split("(");
+          if(splitText.length === 2) {
+            riskIndicatorDescription = splitText[0].trim();
+            riskIndicatorDescriptionSubText = "(" + splitText[1];
           }
-        });
-      }
-      setState({ data: { state: differencesFromSecond, flag: false } }, 'amendmentSummary');
+        }
+
+        tempArray.push({
+          ...item,
+          riskindicatordescription : {value : riskIndicatorDescription}
+        })
+     
+        return {
+          ...item,
+          riskIndicatorDescription,
+          riskIndicatorDescriptionSubText,
+        };
+      }))
+
+      setCurrentFields({
+        ...cloneDeep(get(value, path || name || '', undefined)),
+        [riskIndicatorArrayName as string]: tempArray
+      })
     }
-  }, [dataGrid, lcDetailsData,apiAmdSummary])
+  }, [value, codeValues]);
+
+  const handleRadioGroupOnChange = (value: any, riskindicatorid: any) => {
+    const riskArray = cloneDeep(currentFields?.[riskIndicatorArrayName as string]);
+    const riskIndex = riskArray.findIndex(i => getValueFromPath(i, 'riskindicatorid') === riskindicatorid);
+
+    const newData = {
+      ...currentFields,
+      [riskIndicatorArrayName as string]: set(riskArray, `[${riskIndex}]`, {
+        ...get(riskArray, `[${riskIndex}]`, {}),
+        riskindicatorflag: { value: value },
+        riskindicatorid: { value: riskindicatorid },
+        ...(riskindicatorid === "RI-999" && value === "false") ? {[remarksName as string]: { value: '' }} : {},
+      })
+    };
+
+    setCurrentFields(newData);
+    onChange?.(newData);
+  };
+
+  const handleRemarksOnChange = (value: any) => {
+    const riskArray = cloneDeep(currentFields?.[riskIndicatorArrayName as string]);
+    const riskIndex = riskArray.findIndex(i => getValueFromPath(i, 'riskindicatorid') === "RI-999");
+    const newData = { 
+      ...currentFields, 
+      [riskIndicatorArrayName as string]: set(riskArray, `[${riskIndex}]`, {
+      ...get(riskArray, `[${riskIndex}]`, {}),
+      ...value
+    })};
+    setCurrentFields(newData);
+    onChange?.(newData);
+  };
+
+  return !isObjectEmpty(value) ? (
+    <Styled.Container>
+      <tx-core-grid>
+        <tx-core-column xs="24" sm="12" md="12" lg="12" xl="12">
+          {!!riskIndicatorItems && riskIndicatorItems.slice(0, 4)
+            .map((item, i) => getList(item, i, handleRadioGroupOnChange, {displayType, disabledConditions, disabled: fetching}))
+          }
+        </tx-core-column>
+        <tx-core-column xs="24" sm="12" md="12" lg="12" xl="12">
+          {!!riskIndicatorItems && riskIndicatorItems.slice(4)
+            .map((item, i) => getList(item, i, handleRadioGroupOnChange, {displayType, disabledConditions, disabled: fetching}))
+          }
+          <TXInput
+            label={t('Manual AML Remarks RI-999')}
+            placeholder={t('Enter Remarks...')}
+            type="textarea"
+            name={remarksName}
+            schema={TXRemarks}
+            maxCharacterLimit={256}
+            value={currentFields?.[riskIndicatorArrayName as string]?.[4]}
+            onChange={handleRemarksOnChange}
+            {...getRemarksDisabledAndRequiredValue(props, get(currentFields, riskIndicatorArrayName as string))}
+          />
+        </tx-core-column>
+      </tx-core-grid>
+    </Styled.Container>
+  ) : null;
+};
+
+TXRiskIndicatorList.defaultProps = Default;
